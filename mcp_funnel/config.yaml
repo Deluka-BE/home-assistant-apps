@@ -1,0 +1,28 @@
+name: MCP Funnel
+version: "0.1.0"
+slug: mcp_funnel
+description: "Tailscale Funnel for the existing MCP Gateway on host port 8000"
+arch:
+  - amd64
+  - aarch64
+startup: application
+boot: auto
+init: true
+timeout: 30
+host_network: true
+host_pid: false
+host_ipc: false
+host_dbus: false
+hassio_api: false
+homeassistant_api: false
+auth_api: false
+docker_api: false
+full_access: false
+apparmor: true
+privileged: []
+devices: []
+map: []
+ingress: false
+options: {}
+schema: {}
+stage: experimental
