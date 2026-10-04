@@ -7,6 +7,7 @@ Available apps:
 - [Pironman 5 OLED tekst (test)](pironman5_text/DOCS.md) for Raspberry Pi (aarch64).
 - [Calories Club Node-RED Bridge](calories-club-bridge/DOCS.md) for aarch64 and amd64.
 - [MCP Funnel](mcp_funnel/README.md) for amd64 and aarch64.
+- [Persoonlijke MCP HAOS](personal_mcp_gateway/DOCS.md) for amd64 and aarch64.
 
 Apps will migrate from older repositories one at a time. Existing installed apps remain with their current repositories until each migration is explicitly completed. Creating this catalog does not remove or migrate any installed app.
 

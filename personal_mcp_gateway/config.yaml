@@ -1,0 +1,56 @@
+name: "Persoonlijke MCP HAOS"
+version: "0.2.8"
+slug: "personal_mcp_gateway"
+description: "Persoonlijke Auth0-beveiligde MCP voor Hevy, iCloud Calendar en Spotify"
+url: "https://github.com/Deluka-BE/home-assistant-apps"
+arch:
+  - amd64
+  - aarch64
+image: "ghcr.io/deluka-be/hevy-personal-mcp"
+startup: services
+boot: auto
+init: true
+stage: experimental
+host_network: false
+ingress: false
+hassio_api: false
+homeassistant_api: false
+auth_api: false
+docker_api: false
+ports:
+  8000/tcp: 8000
+ports_description:
+  8000/tcp: "HTTP-ingang voor de externe HTTPS-reverse proxy"
+environment:
+  MCP_CONFIG_SOURCE: "homeassistant"
+  PORT: "8000"
+options:
+  hevy_api_key: null
+  auth0_domain: null
+  auth0_owner_sub: null
+  public_base_url: null
+  caldav_url: ""
+  caldav_username: ""
+  caldav_password: ""
+  caldav_timeout: 20
+  codex_bridge_url: ""
+  codex_bridge_token: ""
+  codex_bridge_cert_sha256: ""
+  spotify_client_id: ""
+  spotify_client_secret: ""
+  spotify_refresh_token: ""
+schema:
+  hevy_api_key: password
+  auth0_domain: str
+  auth0_owner_sub: str
+  public_base_url: url
+  caldav_url: str?
+  caldav_username: str?
+  caldav_password: password?
+  caldav_timeout: int(1,60)?
+  codex_bridge_url: str?
+  codex_bridge_token: password?
+  codex_bridge_cert_sha256: str?
+  spotify_client_id: str?
+  spotify_client_secret: password?
+  spotify_refresh_token: password?
