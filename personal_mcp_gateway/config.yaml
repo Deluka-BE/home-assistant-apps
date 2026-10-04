@@ -1,5 +1,5 @@
 name: "Persoonlijke MCP HAOS"
-version: "0.2.9"
+version: "0.2.10"
 slug: "personal_mcp_gateway"
 description: "Persoonlijke Auth0-beveiligde MCP voor Hevy, iCloud Calendar en Spotify"
 url: "https://github.com/Deluka-BE/home-assistant-apps"
@@ -35,8 +35,6 @@ options:
   caldav_timeout: 20
   codex_bridge_url: ""
   codex_bridge_token: ""
-  codex_operator_token: ""
-  codex_reviewer_token: ""
   codex_bridge_cert_sha256: ""
   spotify_client_id: ""
   spotify_client_secret: ""
@@ -52,8 +50,6 @@ schema:
   caldav_timeout: int(1,60)?
   codex_bridge_url: str?
   codex_bridge_token: password?
-  codex_operator_token: password?
-  codex_reviewer_token: password?
   codex_bridge_cert_sha256: str?
   spotify_client_id: str?
   spotify_client_secret: password?
