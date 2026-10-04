@@ -1,0 +1,35 @@
+name: "Pironman 5 OLED tekst (test)"
+description: "Pironman 5 met eigen OLED-tekst vanuit Node-RED"
+version: "0.2.0"
+slug: pironman5_text
+arch:
+  - aarch64
+init: false
+startup: application
+boot: manual
+privileged:
+  - SYS_RAWIO
+  - SYS_ADMIN
+gpio: true
+devices:
+  - /dev/i2c-1
+  - /dev/spidev0.0
+  - /dev/mem
+  - /dev/vcio
+devicetree: true
+hassio_api: true
+hassio_role: manager
+map:
+  - addon_config:rw
+environment:
+  BLINKA_FORCECHIP: BCM2XXX
+  RPI_LGPIO_REVISION: d04170
+ingress: true
+ingress_port: 34001
+panel_icon: mdi:message-text
+ports:
+  34001/tcp: null
+ports_description:
+  34001/tcp: "Optioneel: dashboard/API op je lokale netwerk"
+options: {}
+schema: {}

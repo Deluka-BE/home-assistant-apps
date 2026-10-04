@@ -1,6 +1,8 @@
 # Deluka’s Home Assistant Apps
 
-This is the future canonical Home Assistant apps catalog for Deluka-BE. It intentionally contains no apps yet.
+This is the future canonical Home Assistant apps catalog for Deluka-BE.
+
+Available app: [Pironman 5 OLED tekst (test)](pironman5_text/DOCS.md) for Raspberry Pi (aarch64).
 
 Apps will migrate from older repositories one at a time. Existing installed apps remain with their current repositories until each migration is explicitly completed. Creating this catalog does not remove or migrate any installed app.
 
