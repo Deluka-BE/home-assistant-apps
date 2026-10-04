@@ -1,0 +1,19 @@
+name: Calories Club Node-RED Bridge
+version: "0.4.4"
+slug: calories_club_bridge
+description: OAuth- en MCP-bridge tussen Node-RED en Calories Club
+url: https://github.com/Deluka-BE/calories-club-node-red-bridge
+arch:
+  - aarch64
+  - amd64
+startup: application
+boot: auto
+init: true
+ports:
+  3000/tcp: 3107
+ports_description:
+  3000/tcp: Calories Club Bridge HTTP API
+options:
+  bridge_api_key: null
+schema:
+  bridge_api_key: password

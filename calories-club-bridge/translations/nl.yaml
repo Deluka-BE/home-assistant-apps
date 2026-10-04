@@ -1,0 +1,6 @@
+configuration:
+  bridge_api_key:
+    name: Bridge API-key
+    description: Geheime sleutel van minstens 16 tekens voor ieder HTTP-verzoek.
+network:
+  3000/tcp: Calories Club Bridge HTTP-API

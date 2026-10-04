@@ -1,0 +1,6 @@
+configuration:
+  bridge_api_key:
+    name: Bridge API key
+    description: Secret key of at least 16 characters required by every HTTP request.
+network:
+  3000/tcp: Calories Club Bridge HTTP API
