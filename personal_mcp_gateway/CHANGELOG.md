@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.11
+
+- Add the first read-only Node-RED integration to the Personal MCP Gateway.
+- Add `nodered_list_tabs`, `nodered_get_flow_snapshot`, `nodered_get_inventory`, `nodered_get_runtime_summary` and `nodered_get_diagnostics`.
+- Add Home Assistant add-on options for `node_red_base_url`, `node_red_username`, `node_red_password` and `node_red_timeout`.
+- Keep Node-RED access limited to fixed GET routes; no deploy, inject, flow mutation or arbitrary HTTP proxy is included.
+- Published as immutable multi-arch image `ghcr.io/deluka-be/hevy-personal-mcp:0.2.11` for amd64 and aarch64.
+
 ## 0.2.5
 
 - Fix CalDAV mutation authentication: guarded mutation GET/PUT/DELETE requests now use the configured authentication.
