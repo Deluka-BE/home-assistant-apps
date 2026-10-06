@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.19
+
+- Add the Lex v2 MCP Events callback stack for owner-bound reserved Codex jobs: native Events discovery/subscription, verified signed webhook delivery, durable terminal ingress, deduplication, retries and restart recovery.
+- Add `codex_reserve_job`, `codex_start_reserved_job` and `codex_notification_status` while preserving the existing direct Codex submission flow.
+- Automatically provision private persistent Events storage on HAOS, including a reusable Fernet key, without requiring a new user-entered secret.
+- Keep callbacks bound to the originating verified subscription; no conversation IDs, broadcasts, or surprise delivery to old chats are introduced.
+- Published as immutable multi-arch image `ghcr.io/deluka-be/hevy-personal-mcp:0.2.19` from source revision `6da49179a1e1b8a86b4bd120c036deb277cf2455`.
+
 ## 0.2.18
 
 - Refine Lovelace projection diagnostics so actual dashboard content omission is distinguished from truncation of the diagnostic manifest itself.
