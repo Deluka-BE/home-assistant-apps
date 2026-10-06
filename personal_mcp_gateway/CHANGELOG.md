@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.20
+
+- Add read-only Home Assistant debugging tools `ha_get_entity_history` and `ha_get_logbook`.
+- Bound history/logbook reads to explicit offset timestamps, at most 24 hours per request, 1–10 entity filters, and a local 1–500 record limit with explicit completeness/truncation metadata.
+- Reuse the existing Supervisor Core read-only transport and safe projection rules; no new Home Assistant permissions, write capabilities, auth layers, or governance are added.
+- Published as immutable multi-arch image `ghcr.io/deluka-be/hevy-personal-mcp:0.2.20` from source revision `b38d16fcd97440805223712f5792764357c2bd14`.
+
 ## 0.2.19
 
 - Add the Lex v2 MCP Events callback stack for owner-bound reserved Codex jobs: native Events discovery/subscription, verified signed webhook delivery, durable terminal ingress, deduplication, retries and restart recovery.
