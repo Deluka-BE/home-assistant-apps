@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.18
+
+- Refine Lovelace projection diagnostics so actual dashboard content omission is distinguished from truncation of the diagnostic manifest itself.
+- Add explicit `content_omitted` and `manifest_truncated` status flags plus `manifest_entries_omitted` counting, while preserving the legacy `omitted` and `entries_omitted` aliases.
+- Keep `projection_complete` tied to policy redactions or actual content omissions; manifest truncation alone no longer marks the projected dashboard content incomplete.
+- Preserve the existing pagination, discovery, detection and strict `complete` semantics introduced in 0.2.17.
+- Published as immutable multi-arch image `ghcr.io/deluka-be/hevy-personal-mcp:0.2.18` from source revision `4f05e6438b0c7618d84676603b1031eec172ea45`.
+
 ## 0.2.17
 
 - Make dashboard read completeness explicit instead of overloading one boolean.
