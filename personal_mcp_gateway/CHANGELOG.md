@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.15
+
+- Route Personal Codex tooling to the Linux Lex v2 bridge on the existing private HTTPS bridge path.
+- Add bounded completion waiting to `codex_get_job` with optional `wait_seconds` (0-25) to reduce repeated polling.
+- Keep research/review text-only, implementation repository-scoped, existing certificate pinning, idempotency and fail-closed behavior.
+- Add a safe internal terminal-event projection for future MCP Events delivery; automatic ChatGPT wake-up is not enabled yet.
+- Published as immutable multi-arch image `ghcr.io/deluka-be/hevy-personal-mcp:0.2.15` from source revision `4dbe6e71145394eccafefebd090da5020014c07d`.
+
 ## 0.2.12
 
 - Add the first read-only Home Assistant integration to the Personal MCP Gateway.
