@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.21
+
+- Add read-only `ha_observe_raw` with a bounded BLE adapter for short live raw-observation windows.
+- Require an address and/or name filter, cap observation at 1–5 seconds and 1–100 results, and distinguish initial cache replay from live callback updates.
+- Preserve BLE manufacturer/service data, RSSI, scanner source, UUIDs and optional raw packet hex with explicit semantics, redaction and completeness/truncation metadata.
+- Reuse the existing authenticated Home Assistant WebSocket transport; no GATT reads, writes, service calls, active-scan requests or new Home Assistant permissions are added.
+- Published as immutable multi-arch image `ghcr.io/deluka-be/hevy-personal-mcp:0.2.21` from source revision `1d6d2005b5df565c0d560d7213aac8b7d19e65ad`.
+
 ## 0.2.20
 
 - Add read-only Home Assistant debugging tools `ha_get_entity_history` and `ha_get_logbook`.
