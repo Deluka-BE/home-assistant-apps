@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.17
+
+- Make dashboard read completeness explicit instead of overloading one boolean.
+- Add `pagination_complete`, `projection_complete`, `discovery_complete` and `detection_complete` where applicable.
+- Add deterministic projection status/counts so redactions and size-driven omissions can be distinguished from pagination.
+- Keep the existing `complete` field backward-compatible as the strict combination of all applicable completeness dimensions.
+- Preserve conservative caveats for custom cards, strategy-generated content and dynamic entity discovery.
+- Published as immutable multi-arch image `ghcr.io/deluka-be/hevy-personal-mcp:0.2.17` from source revision `38a791ac86cf13b448ea05a13830e77134412799`.
+
 ## 0.2.16
 
 - Add read-only Lovelace dashboard discovery with `ha_list_dashboards`.
