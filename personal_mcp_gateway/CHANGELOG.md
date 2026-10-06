@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.12
+
+- Add the first read-only Home Assistant integration to the Personal MCP Gateway.
+- Add `ha_list_entities`, `ha_get_entity_state` and `ha_get_instance_info`.
+- Enable the Home Assistant Core API permission for the add-on with `homeassistant_api: true`; all other Supervisor/API permissions remain disabled.
+- Restrict Home Assistant access to fixed GET routes for `config`, `states` and `states/<entity_id>` through the Supervisor Core proxy; no services, writes, templates, WebSocket access or Supervisor management are included.
+- Published as immutable multi-arch image `ghcr.io/deluka-be/hevy-personal-mcp:0.2.12` for amd64 and aarch64 from source revision `9af8d923fb09a1cedf8f79141de34a4b42a0067e`.
+
 ## 0.2.11
 
 - Add the first read-only Node-RED integration to the Personal MCP Gateway.
