@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.16
+
+- Add read-only Lovelace dashboard discovery with `ha_list_dashboards`.
+- Add sanitized, paginated dashboard configuration reads with `ha_get_dashboard`, preserving lossless private snapshots for future safe editing.
+- Add `ha_get_dashboard_entity_usage` for structural entity-reference discovery with optional labeled heuristic matches.
+- Use the Supervisor Core WebSocket proxy with a fixed read-only Lovelace command allowlist; no dashboard writes, service calls, templates, arbitrary RPC or extra HAOS permissions are enabled.
+- Correct completion semantics so `complete` accurately reflects whether the current dashboard/entity-usage query is fully represented, while retaining caveats for dynamic/custom-card content.
+- Published as immutable multi-arch image `ghcr.io/deluka-be/hevy-personal-mcp:0.2.16` from source revision `5ad2cfef59647e381853abad57ce5ea79be6aec0`.
+
 ## 0.2.15
 
 - Route Personal Codex tooling to the Linux Lex v2 bridge on the existing private HTTPS bridge path.
