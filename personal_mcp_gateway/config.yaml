@@ -1,7 +1,7 @@
 name: "Persoonlijke MCP HAOS"
-version: "0.2.11"
+version: "0.2.12"
 slug: "personal_mcp_gateway"
-description: "Persoonlijke Auth0-beveiligde MCP voor Hevy, iCloud Calendar, Spotify en Node-RED"
+description: "Persoonlijke Auth0-beveiligde MCP voor Hevy, iCloud Calendar, Spotify, Node-RED en Home Assistant"
 url: "https://github.com/Deluka-BE/home-assistant-apps"
 arch:
   - amd64
@@ -14,7 +14,7 @@ stage: experimental
 host_network: false
 ingress: false
 hassio_api: false
-homeassistant_api: false
+homeassistant_api: true
 auth_api: false
 docker_api: false
 ports:
