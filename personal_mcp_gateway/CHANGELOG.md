@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.22
+
+- Add read-only Home Assistant tools `ha_get_system_log`, `ha_list_statistics` and `ha_get_statistics`.
+- Reuse the existing authenticated Home Assistant WebSocket transport for bounded, sanitized system log and Recorder statistics reads.
+- Keep the existing Home Assistant configuration schema and permissions unchanged.
+
 ## 0.2.21
 
 - Add read-only `ha_observe_raw` with a bounded BLE adapter for short live raw-observation windows.
