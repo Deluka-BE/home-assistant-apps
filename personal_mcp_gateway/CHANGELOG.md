@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.23
+
+- Add optional read-only `nodered_read_logs` with bounded JSONL reads, UTC/node/flow filters, and safe pagination.
+- Mount Home Assistant `/share` read-only and add disabled-by-default log-reader settings with explicit source allowlist.
+- Preserve all existing MCP tools and authentication. Node-RED debug-file producer requires a separate update and configuration.
+- Published image is `ghcr.io/deluka-be/hevy-personal-mcp:0.2.23` from source `75c89deac206ad179ef6a27a8a5eb997c31e910f`.
+
 ## 0.2.22
 
 - Add read-only Home Assistant tools `ha_get_system_log`, `ha_list_statistics` and `ha_get_statistics`.
