@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.24
+
+- Add bounded read-only `nodered_list_logs` metadata discovery and `nodered_read_logs` by safe filename from the configured log directory.
+- Default directory: `/share/nodered-logs`; reader remains disabled by default. Existing `sourceId` maps remain compatible.
+- Reject traversal, symlinks and non-regular files; preserve bounded scans, signed pagination and safe error diagnostics.
+- Verify read-only shared mount and numeric UID/GID `10001:10001` permissions in container CI for both architectures. Producer setup and live file permissions remain administrator-managed.
+- Image: `ghcr.io/deluka-be/hevy-personal-mcp:0.2.24`, source `14f6515c5a8322cb85e2678dfffb9773db533b7d`.
+
 ## 0.2.23
 
 - Add optional read-only `nodered_read_logs` with bounded JSONL reads, UTC/node/flow filters, and safe pagination.
