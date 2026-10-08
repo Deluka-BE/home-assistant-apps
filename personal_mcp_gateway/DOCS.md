@@ -13,6 +13,7 @@ De Node-RED-integratie is uitsluitend read-only en biedt:
 - `nodered_get_inventory`
 - `nodered_get_runtime_summary`
 - `nodered_get_diagnostics`
+- `nodered_read_logs` (alleen wanneer ingeschakeld)
 
 Voor de Home Assistant Node-RED add-on kan de directe lokale route worden gebruikt,
 bijvoorbeeld `http://192.168.0.3:1880`. Gebruik hiervoor bij voorkeur een aparte
@@ -39,3 +40,10 @@ bereikbaar; verzoeken lopen via de bestaande beveiligde Bridge.
 Vul de add-onopties in via de Home Assistant-configuratie. De catalogusversie
 verwijst naar een al gepubliceerde image met een onveranderlijke versietag;
 historische tags worden niet overschreven.
+
+## Optionele Node-RED JSONL-logreader
+
+Standaard uitgeschakeld. De MCP-add-on koppelt `/share` uitsluitend-lezen.
+Na afzonderlijke installatie/configuratie van de aangepaste Node-RED `debug-file`-node en een schrijfbare gedeelde map voor de Node-RED-add-on, kan je `node_red_log_reader_enabled` inschakelen en bijvoorbeeld `node_red_log_sources` instellen op de JSON-string `{"debug":"/share/nodered-logs/debug.log.jsonl"}`. De werkelijke bestandsnaam moet overeenkomen met de sidecar. De gateway kan geen bestanden uit de private Node-RED `/data` lezen.
+
+De reader biedt uitsluitend toegang tot expliciet toegestane bestanden. Berichtwaarden worden standaard niet teruggegeven. Zet de reader pas aan nadat de bestandsrechten en JSONL-output gecontroleerd zijn.
