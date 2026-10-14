@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.26
+
+- Add bounded structured diagnostics for the Codex/MCP Events lifecycle, including reserve/start gates, discovery, subscribe/unsubscribe, callback verification, terminal ingress/delivery and worker lifecycle.
+- Add owner-scoped read-only `codex_notification_diagnostics` states to distinguish missing/unbound subscriptions, verification state, expiry, pending delivery, delivered and failed delivery.
+- Keep Events verification and start gating unchanged; sensitive callback URLs, tokens, signing secrets, task text, response bodies and raw exception text remain excluded from logs.
+- Published as immutable multi-arch image `ghcr.io/deluka-be/hevy-personal-mcp:0.2.26` from source revision `d8c8f0ffe67aa285b7c12ab934666031abc6a243`.
+
 ## 0.2.24
 
 - Add bounded read-only `nodered_list_logs` metadata discovery and `nodered_read_logs` by safe filename from the configured log directory.
