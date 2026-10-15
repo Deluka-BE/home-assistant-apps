@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.28
+
+- Fix Hevy routine synchronization when the API omits routine notes; preserve existing notes and synchronization safety checks.
+- Published immutable image from source `d1aea9d661a57a67be40ba87714fb9adea4c835d`; 506 source tests and publication checks passed.
+
 ## 0.2.26
 
 - Add bounded structured diagnostics for the Codex/MCP Events lifecycle, including reserve/start gates, discovery, subscribe/unsubscribe, callback verification, terminal ingress/delivery and worker lifecycle.
