@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.2.26
+
+- Add bounded structured diagnostics for the Codex/MCP Events lifecycle, including reserve/start gates, discovery, subscribe/unsubscribe, callback verification, terminal ingress/delivery and worker lifecycle.
+- Add owner-scoped read-only `codex_notification_diagnostics` states to distinguish missing/unbound subscriptions, verification state, expiry, pending delivery, delivered and failed delivery.
+- Keep Events verification and start gating unchanged; sensitive callback URLs, tokens, signing secrets, task text, response bodies and raw exception text remain excluded from logs.
+- Published as immutable multi-arch image `ghcr.io/deluka-be/hevy-personal-mcp:0.2.26` from source revision `d8c8f0ffe67aa285b7c12ab934666031abc6a243`.
+
+## 0.2.24
+
+- Add bounded read-only `nodered_list_logs` metadata discovery and `nodered_read_logs` by safe filename from the configured log directory.
+- Default directory: `/share/nodered-logs`; reader remains disabled by default. Existing `sourceId` maps remain compatible.
+- Reject traversal, symlinks and non-regular files; preserve bounded scans, signed pagination and safe error diagnostics.
+- Verify read-only shared mount and numeric UID/GID `10001:10001` permissions in container CI for both architectures. Producer setup and live file permissions remain administrator-managed.
+- Image: `ghcr.io/deluka-be/hevy-personal-mcp:0.2.24`, source `14f6515c5a8322cb85e2678dfffb9773db533b7d`.
+
 ## 0.2.23
 
 - Add optional read-only `nodered_read_logs` with bounded JSONL reads, UTC/node/flow filters, and safe pagination.

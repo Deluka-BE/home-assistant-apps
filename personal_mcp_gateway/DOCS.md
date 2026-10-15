@@ -13,7 +13,7 @@ De Node-RED-integratie is uitsluitend read-only en biedt:
 - `nodered_get_inventory`
 - `nodered_get_runtime_summary`
 - `nodered_get_diagnostics`
-- `nodered_read_logs` (alleen wanneer ingeschakeld)
+- `nodered_list_logs` en `nodered_read_logs` (alleen wanneer ingeschakeld)
 
 Voor de Home Assistant Node-RED add-on kan de directe lokale route worden gebruikt,
 bijvoorbeeld `http://192.168.0.3:1880`. Gebruik hiervoor bij voorkeur een aparte
@@ -44,6 +44,19 @@ historische tags worden niet overschreven.
 ## Optionele Node-RED JSONL-logreader
 
 Standaard uitgeschakeld. De MCP-add-on koppelt `/share` uitsluitend-lezen.
-Na afzonderlijke installatie/configuratie van de aangepaste Node-RED `debug-file`-node en een schrijfbare gedeelde map voor de Node-RED-add-on, kan je `node_red_log_reader_enabled` inschakelen en bijvoorbeeld `node_red_log_sources` instellen op de JSON-string `{"debug":"/share/nodered-logs/debug.log.jsonl"}`. De werkelijke bestandsnaam moet overeenkomen met de sidecar. De gateway kan geen bestanden uit de private Node-RED `/data` lezen.
+Stel `node_red_log_directory` in op de gedeelde logmap (standaard
+`/share/nodered-logs`) en schakel `node_red_log_reader_enabled` pas in nadat
+de producer en bestandsrechten gecontroleerd zijn. De gateway maakt geen map
+of logs aan en wijzigt geen rechten. Private Node-RED `/data` is niet zichtbaar.
 
-De reader biedt uitsluitend toegang tot expliciet toegestane bestanden. Berichtwaarden worden standaard niet teruggegeven. Zet de reader pas aan nadat de bestandsrechten en JSONL-output gecontroleerd zijn.
+`nodered_list_logs` toont begrensde metadata voor reguliere `.log`/`.jsonl`
+bestanden; gebruik `filename` in `nodered_read_logs`. Paden, symlinks en
+niet-reguliere bestanden worden geweigerd. Oude `node_red_log_sources`
+JSON-maps en `sourceId` blijven werken; `filename` en `sourceId` zijn exclusief.
+Berichtwaarden worden standaard weggelaten; producer-redactie blijft nodig.
+
+De gateway draait als numerieke UID/GID `10001:10001` zonder extra groepen.
+Die identiteit moet de map kunnen doorzoeken/lezen en de bestanden lezen,
+ook na logrotatie. Ontbrekende bestanden en geweigerde rechten geven vaste,
+padvrije foutcodes. De gateway leest uitsluitend en voert geen retries uit
+bij bestandswijzigingen; herstart paginering bij rotatie of een gewijzigde log.
