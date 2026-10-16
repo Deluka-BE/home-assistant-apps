@@ -1,0 +1,12 @@
+name: Apple Music Offline Diagnostics
+version: "0.1.0"
+slug: apple_music_offline_diagnostics
+description: Offline in-memory MCP startup diagnostics; no Apple connectivity
+arch:
+  - aarch64
+startup: application
+boot: manual
+init: false
+options: {}
+schema: {}
+url: https://github.com/Deluka-BE/home-assistant-apps/tree/main/apple_music_offline_diagnostics

@@ -1,0 +1,13 @@
+# Explicit context allowlist: no credentials, tests, VCS, docs or desktop code.
+**
+!pyproject.toml
+!README.md
+!src/
+!src/apple_music_mcp/
+!src/apple_music_mcp/__init__.py
+!src/apple_music_mcp/auth.py
+!src/apple_music_mcp/client.py
+!src/apple_music_mcp/logging.py
+!src/apple_music_mcp/server.py
+!src/apple_music_mcp/web_session.py
+!src/apple_music_mcp/haos_fake.py
