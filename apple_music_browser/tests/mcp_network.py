@@ -37,7 +37,9 @@ async def main():
         assert request(base, auth=auth, path='/mcp?token=ignored')[0] == 404
         assert request(base, 'GET', auth)[0] == 405  # Stateless: no standalone SSE.
         assert request(base, 'DELETE', auth)[0] == 405
-        assert request(base, auth=auth, payload=b' ' * 65537)[0] == 413
+        # Declare oversize before uploading: server must reject from headers.
+        # Sending the full body races TLS close and can hide the 413 as BrokenPipe.
+        assert request(base, auth=auth, extra={'Content-Length': '65537'}, payload=b'')[0] == 413
         for version in ('2025-03-26', '2025-06-18', '2025-11-25'):
             status, body = request(base, auth=auth, payload=json.dumps({
                 'jsonrpc': '2.0', 'id': 1, 'method': 'initialize', 'params': {

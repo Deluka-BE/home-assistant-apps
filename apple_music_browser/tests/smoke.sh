@@ -102,7 +102,11 @@ docker run --rm -v apple-test-data:/data --entrypoint /opt/venv/bin/python apple
 docker start apple-test
 for attempt in $(seq 1 60); do
   if docker exec apple-test /opt/venv/bin/python -c 'import socket; socket.create_connection(("127.0.0.1",8765),1)' 2>/dev/null; then
-    echo 'MCP restarted with persistent profile: PASS'
+    docker run --rm --network apple-test --add-host host.docker.internal:host-gateway \
+      -v apple-test-data:/data:ro -v apple-test-ssl:/ssl:ro \
+      -v "$(pwd)/apple_music_browser/tests:/tests:ro" \
+      --entrypoint /opt/venv/bin/python apple-music-test /tests/mcp_network.py
+    echo 'Authenticated TLS MCP reconnected after persistent-profile restart: PASS' 
     exit 0
   fi
   sleep 2
