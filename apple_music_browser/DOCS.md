@@ -55,6 +55,20 @@ A successful image build alone is not proof of full-track playback or audible ou
 
 ## Release gate
 
-Push builds publish only after native ARM64 image and smoke tests pass. Pull request
+Main-branch push builds publish only after native ARM64 image and smoke tests pass. Pull request
 builds validate without publishing. Account/HA audio limitations remain unverified
 by account-free CI. Do not present an unverified DRM fallback as a working Apple Music player.
+
+## 0.1.1 ingress correction
+
+The standalone nginx configuration now includes Debian's MIME table. In 0.1.0,
+CSS, ES modules and SVG icons returned HTTP 200 but `Content-Type: text/plain`,
+preventing Chrome from loading the noVNC UI. Relative URLs were already correct;
+no prefix rewriting or changes to the browser/MCP server are necessary.
+
+Native ARM64 CI reproduces the old CSS response on a separate nginx listener,
+then checks the fixed UI through `/api/hassio_ingress/<token>/` on a proxy at
+Supervisor's source IP. It checks the redirect, CSS/JS/icon status, MIME and exact
+package content, browser module loading, a rendered connected noVNC canvas, and
+WebSocket RFB protocol data under the prefix. This models Ingress routing; it does
+not install the add-on on HAOS or verify a real HA session, Apple login or audio.

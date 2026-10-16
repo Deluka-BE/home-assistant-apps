@@ -32,6 +32,27 @@ with sync_playwright() as p:
     print('Native ARM64 Chrome Widevine MediaKeys: PASS')
     b.close()
 PY
+# Reproduce the old MIME failure on a separate nginx listener, using the same assets.
+# The production listener/config and Supervisor allowlist remain intact.
+docker exec -i apple-test /opt/venv/bin/python - <<'PYREG'
+from pathlib import Path
+config = Path('/opt/addon/nginx.conf').read_text()
+config = '\n'.join(line for line in config.splitlines()
+                   if 'include /etc/nginx/mime.types;' not in line
+                   and 'default_type ' not in line)
+config = config.replace('listen 8099;', 'listen 8100;').replace('/tmp/nginx.pid', '/tmp/nginx-regression.pid')
+Path('/tmp/nginx-regression.conf').write_text(config)
+PYREG
+docker exec apple-test nginx -c /tmp/nginx-regression.conf
+# The browser sees /api/hassio_ingress/<token>/; only the proxy strips it.
+# Chrome runs outside the addon, at the exact Supervisor source IP.
+docker run --rm --network apple-test --ip 172.30.32.2 \
+  -v "$(pwd)/apple_music_browser/tests:/tests:ro" \
+  --entrypoint /bin/sh apple-music-test -ec '
+    nginx -c /tests/ingress-proxy.conf
+    /opt/venv/bin/python /tests/ingress.py --regression
+    /opt/venv/bin/python /tests/ingress.py
+  '
 # Use the exact Supervisor source IP; test ingress HTML, WebSocket handshake and MCP.
 docker run --rm -i --network apple-test --ip 172.30.32.2 --entrypoint /opt/venv/bin/python apple-music-test - <<'PY'
 import json, socket, urllib.request
