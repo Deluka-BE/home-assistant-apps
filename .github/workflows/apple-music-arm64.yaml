@@ -1,0 +1,20 @@
+name: Apple Music ARM64
+on:
+  push:
+    branches: [apple-music-arm64]
+    paths: ['apple_music_browser/**', '.github/workflows/apple-music-arm64.yaml']
+  pull_request:
+    paths: ['apple_music_browser/**', '.github/workflows/apple-music-arm64.yaml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build native ARM64 image
+        run: docker build --platform linux/arm64 -t apple-music-test apple_music_browser
+      - name: Verify browser, DRM capability, ingress and MCP without an account
+        run: apple_music_browser/tests/smoke.sh
