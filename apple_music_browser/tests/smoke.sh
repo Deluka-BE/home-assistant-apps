@@ -107,6 +107,23 @@ for attempt in $(seq 1 60); do
       -v "$(pwd)/apple_music_browser/tests:/tests:ro" \
       --entrypoint /opt/venv/bin/python apple-music-test /tests/mcp_network.py
     echo 'Authenticated TLS MCP reconnected after persistent-profile restart: PASS'
+    docker exec apple-test /opt/venv/bin/python -c 'import json; p="/data/options.json"; o=json.load(open(p)); o["mcp_enabled"]=False; json.dump(o,open(p,"w"))'
+    docker restart -t 40 apple-test
+    for disabled_attempt in $(seq 1 60); do
+      if docker logs apple-test 2>&1 | grep -q 'MCP disabled; browser remains available'; then break; fi
+      sleep 2
+    done
+    docker logs apple-test 2>&1 | grep -q 'MCP disabled; browser remains available'
+    docker exec apple-test /opt/venv/bin/python -c 'import socket
+s=socket.socket(); s.settimeout(1)
+assert s.connect_ex(("127.0.0.1",8765)) != 0, "Disabled MCP is listening"
+s.close()'
+    docker run --rm --network apple-test --ip 172.30.32.2 --entrypoint /opt/venv/bin/python apple-music-test -c 'import urllib.request; assert b"noVNC" in urllib.request.urlopen("http://172.30.32.3:8099/vnc.html").read()'
+    docker stop -t 40 apple-test
+    docker run --rm -v apple-test-data:/data:ro --entrypoint /opt/venv/bin/python apple-music-test -c 'import json,pathlib
+json.load(open("/data/browser/chrome/Default/Preferences"))
+assert not pathlib.Path("/data/browser/chrome/SingletonLock").is_symlink(), "Browser did not close cleanly"
+print("Disabled MCP has no listener; ingress works; Chrome closes cleanly with persistent profile: PASS")'
     exit 0
   fi
   sleep 2

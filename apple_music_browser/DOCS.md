@@ -144,7 +144,9 @@ No playlist operations or broad upstream server imports are added.
 CI generates ephemeral secrets privately and tests missing/wrong authentication on all
 methods, origin rejection, TLS validation, initialize/version negotiation, SDK handshake,
 ping/list/call, internal DNS and a real Docker-published host port from a sibling container.
-It retains native ARM64 Widevine, ingress/noVNC, loopback VNC isolation and persistence tests.
+It also verifies disabled MCP has no listener, noVNC still works, and Chrome shuts down
+cleanly with its profile intact. It retains native ARM64 Widevine, ingress/noVNC,
+loopback VNC isolation and persistence tests.
 This models HAOS bridge networking, not a real Supervisor installation or Windows test.
 
 On-device verification after updating: configure TLS/secret, restart, connect from Windows

@@ -3,6 +3,7 @@
 Do not import upstream server: its broad tools include playlist operations.
 """
 import atexit
+import signal
 import threading
 import time
 import uvicorn
@@ -81,7 +82,11 @@ if __name__ == "__main__":
     settings = load_settings()
     if settings is None:
         # Keep the persistent browser and its token preservation alive.
-        threading.Event().wait()
+        stopped = threading.Event()
+        signal.signal(signal.SIGTERM, lambda *_: stopped.set())
+        signal.signal(signal.SIGINT, lambda *_: stopped.set())
+        print("MCP disabled; browser remains available", flush=True)
+        stopped.wait()
     else:
         token, certfile, keyfile = settings
         uvicorn.run(AuthenticatedMCP(mcp.streamable_http_app(), token),
