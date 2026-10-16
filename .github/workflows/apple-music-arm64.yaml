@@ -1,0 +1,38 @@
+name: Apple Music ARM64
+on:
+  push:
+    branches: [main, apple-music-arm64]
+    paths: ['apple_music_browser/**', '.github/workflows/apple-music-arm64.yaml']
+  pull_request:
+    paths: ['apple_music_browser/**', '.github/workflows/apple-music-arm64.yaml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  packages: write
+concurrency:
+  group: apple-music-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  validate:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build native ARM64 image
+        run: docker build --platform linux/arm64 -t apple-music-test apple_music_browser
+      - name: Verify browser, DRM capability, ingress and MCP without an account
+        run: sh apple_music_browser/tests/smoke.sh
+      - name: Publish validated image
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_USER: ${{ github.actor }}
+        run: |
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$GH_USER" --password-stdin
+          version=$(python3 -c 'import json; print(json.load(open("apple_music_browser/release.json"))["version"])')
+          image=ghcr.io/deluka-be/ha-apple-music-browser-aarch64
+          docker tag apple-music-test "$image:$version"
+          docker tag apple-music-test "$image:sha-$GITHUB_SHA"
+          docker push "$image:$version"
+          docker push "$image:sha-$GITHUB_SHA"
