@@ -51,6 +51,15 @@ res=rpc('tools/call',{'name':'play_song','arguments':{'catalog_id':'playlist-tes
 assert res['result']['isError'] is True
 print('Ingress HTML, WebSocket, MCP initialize/list and playlist-input rejection: PASS')
 PY
-docker exec apple-test sh -c 'test -f /data/browser/chrome/Default/Preferences && touch /data/persistence-test'
-docker restart apple-test
-docker exec apple-test test -f /data/persistence-test
+docker exec apple-test touch /data/persistence-test
+docker stop -t 40 apple-test
+docker run --rm -v apple-test-data:/data --entrypoint /opt/venv/bin/python apple-music-test -c 'import json,pathlib; assert pathlib.Path("/data/persistence-test").exists(); json.load(open("/data/browser/chrome/Default/Preferences")); print("Profile persisted after clean shutdown: PASS")'
+docker start apple-test
+for attempt in $(seq 1 60); do
+  if docker exec apple-test /opt/venv/bin/python -c 'import socket; socket.create_connection(("127.0.0.1",8765),1)' 2>/dev/null; then
+    echo 'MCP restarted with persistent profile: PASS'
+    exit 0
+  fi
+  sleep 2
+done
+exit 1

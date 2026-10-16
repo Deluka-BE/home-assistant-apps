@@ -13,7 +13,6 @@ children = []
 def stop(*_, exit_code=0):
     for child in reversed(children):
         child.terminate()
-    for child in children:
         try:
             child.wait(timeout=10)
         except subprocess.TimeoutExpired:
