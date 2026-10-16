@@ -43,6 +43,13 @@ class SecurityTests(unittest.TestCase):
                     await secured({'type': 'http', 'method': method, 'path': '/mcp',
                                    'headers': headers}, None, send)
                     self.assertEqual(messages[0]['status'], 401)
+            for method in ('GET', 'DELETE', 'OPTIONS'):
+                messages = []
+                async def send(message):
+                    messages.append(message)
+                await secured({'type': 'http', 'method': method, 'path': '/mcp',
+                               'headers': [(b'authorization', ('Bearer ' + token).encode())]}, None, send)
+                self.assertEqual(messages[0]['status'], 405)
             self.assertEqual(called, [])
             await secured({'type': 'http', 'path': '/mcp', 'headers': [
                 (b'authorization', ('Bearer ' + token).encode())]}, None, None)

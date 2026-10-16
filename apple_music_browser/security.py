@@ -39,6 +39,8 @@ class AuthenticatedMCP:
             response = Response(status_code=403)
         elif scope['path'] != '/mcp' or scope.get('query_string'):
             response = Response(status_code=404)
+        elif scope.get('method', 'POST') != 'POST':
+            response = Response(status_code=405, headers={'Allow': 'POST'})
         else:
             return await self.app(scope, receive, send)
         await response(scope, receive, send)
