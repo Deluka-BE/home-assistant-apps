@@ -64,11 +64,11 @@ with sync_playwright() as p:
     errors, responses, sockets, frames = [], [], [], []
     page.on('pageerror', lambda error: errors.append(str(error)))
     page.on('requestfailed', lambda request: errors.append(f'{request.url}: {request.failure}'))
-    page.on('response', responses.append)
+    page.on('response', lambda response: responses.append(response))
 
     def websocket(ws):
         sockets.append(ws.url)
-        ws.on('framereceived', frames.append)
+        ws.on('framereceived', lambda frame: frames.append(frame))
         ws.on('socketerror', lambda error: errors.append(str(error)))
 
     page.on('websocket', websocket)
