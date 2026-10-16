@@ -21,6 +21,8 @@ jobs:
       - uses: docker/setup-buildx-action@v3
       - name: Build native ARM64 image
         run: docker build --platform linux/arm64 -t apple-music-test apple_music_browser
+      - name: Verify fail-closed configuration and authentication
+        run: docker run --rm -v "$PWD/apple_music_browser/tests:/tests:ro" --entrypoint /opt/venv/bin/python apple-music-test -m unittest discover -s /tests -p 'test_*.py'
       - name: Verify browser, DRM capability, ingress and MCP without an account
         run: sh apple_music_browser/tests/smoke.sh
       - name: Publish validated image

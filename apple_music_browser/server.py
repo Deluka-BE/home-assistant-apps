@@ -5,12 +5,16 @@ Do not import upstream server: its broad tools include playlist operations.
 import atexit
 import threading
 import time
+import uvicorn
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
+from security import AuthenticatedMCP, load_settings
 from applemusic_mcp import browser
 from applemusic_mcp.auth import save_user_token
 
-mcp = FastMCP("Apple Music Browser", host="127.0.0.1", port=8765,
-              stateless_http=True, json_response=True)
+mcp = FastMCP("Apple Music Browser", host="0.0.0.0", port=8765,
+              stateless_http=True, json_response=True, max_request_body_size=65536,
+              transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False))
 
 
 @mcp.tool()
@@ -74,4 +78,13 @@ if __name__ == "__main__":
     atexit.register(browser._engine.shutdown)
     open_browser()
     threading.Thread(target=preserve_web_session, daemon=True).start()
-    mcp.run(transport="streamable-http")
+    settings = load_settings()
+    if settings is None:
+        # Keep the persistent browser and its token preservation alive.
+        threading.Event().wait()
+    else:
+        token, certfile, keyfile = settings
+        uvicorn.run(AuthenticatedMCP(mcp.streamable_http_app(), token),
+                    host="0.0.0.0", port=8765, ssl_certfile=certfile,
+                    ssl_keyfile=keyfile, access_log=False,
+                    limit_concurrency=32, timeout_keep_alive=5)

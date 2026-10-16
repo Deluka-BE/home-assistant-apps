@@ -2,8 +2,22 @@
 set -eu
 docker network create --subnet 172.30.32.0/24 apple-test
 docker volume create apple-test-data
-trap 'docker logs apple-test; docker rm -f apple-test; docker network rm apple-test; docker volume rm apple-test-data' EXIT
-docker run -d --name apple-test --network apple-test --ip 172.30.32.3 -v apple-test-data:/data apple-music-test
+docker volume create apple-test-ssl
+# Random ephemeral CI credentials stay in a private volume, never in logs/arguments.
+docker run --rm -v apple-test-data:/data -v apple-test-ssl:/ssl --entrypoint /bin/sh apple-music-test -ec '
+  umask 077
+  openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj /CN=apple-test \
+    -addext "subjectAltName=DNS:apple-test,DNS:host.docker.internal" \
+    -keyout /ssl/key.pem -out /ssl/cert.pem 2>/dev/null
+ '
+docker run --rm -i -v apple-test-data:/data --entrypoint /opt/venv/bin/python apple-music-test - <<'PYOPTIONS'
+import json, secrets, os
+os.umask(0o077)
+json.dump({'mcp_enabled': True, 'mcp_token': secrets.token_urlsafe(48),
+           'mcp_certfile': 'cert.pem', 'mcp_keyfile': 'key.pem'}, open('/data/options.json', 'w'))
+PYOPTIONS
+trap 'docker logs apple-test; docker rm -f apple-test; docker network rm apple-test; docker volume rm apple-test-data apple-test-ssl' EXIT
+docker run -d --name apple-test --network apple-test --ip 172.30.32.3 -p 18765:8765 -v apple-test-ssl:/ssl:ro -v apple-test-data:/data apple-music-test
 for attempt in $(seq 1 90); do
   if docker exec apple-test /opt/venv/bin/python -c 'import socket; socket.create_connection(("127.0.0.1",8765),1)' 2>/dev/null; then break; fi
   sleep 2
@@ -57,7 +71,7 @@ docker run --rm --network apple-test --ip 172.30.32.2 \
 docker run --rm -i --network apple-test --ip 172.30.32.2 --entrypoint /opt/venv/bin/python apple-music-test - <<'PY'
 import json, socket, urllib.request
 base='http://172.30.32.3:8099'
-for port in (5900,6080,8765):
+for port in (5900,6080):
     try:
         leaked=socket.create_connection(('172.30.32.3',port),1)
     except OSError:
@@ -69,17 +83,19 @@ s=socket.create_connection(('172.30.32.3',8099))
 s.sendall(b'GET /websockify HTTP/1.1\r\nHost: localhost\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\r\n')
 assert b'101' in s.recv(4096).split(b'\r\n')[0]
 s.close()
-def rpc(method, params):
-    req=urllib.request.Request(base+'/mcp',json.dumps({'jsonrpc':'2.0','id':1,'method':method,'params':params}).encode(),headers={'Content-Type':'application/json','Accept':'application/json, text/event-stream'})
-    return json.load(urllib.request.urlopen(req))
-assert 'result' in rpc('initialize',{'protocolVersion':'2025-03-26','capabilities':{},'clientInfo':{'name':'smoke','version':'1'}})
-tools=rpc('tools/list',{})['result']['tools']
-assert {t['name'] for t in tools} == {'play_song','control','now_playing','volume'}
-assert not rpc('tools/call',{'name':'now_playing','arguments':{}})['result'].get('isError',False)
-res=rpc('tools/call',{'name':'play_song','arguments':{'catalog_id':'playlist-test'}})
-assert res['result']['isError'] is True
-print('Ingress HTML, WebSocket, MCP initialize/list and playlist-input rejection: PASS')
+import urllib.error
+try:
+    urllib.request.urlopen(base+'/mcp')
+    raise AssertionError('Ingress MCP must be removed')
+except urllib.error.HTTPError as error:
+    assert error.code == 404
+print('Ingress HTML, WebSocket, VNC isolation and removed ingress MCP: PASS')
 PY
+# Docker host publishing models Windows LAN access; sibling DNS models HA addons.
+docker run --rm --network apple-test --add-host host.docker.internal:host-gateway \
+  -v apple-test-data:/data:ro -v apple-test-ssl:/ssl:ro \
+  -v "$(pwd)/apple_music_browser/tests:/tests:ro" \
+  --entrypoint /opt/venv/bin/python apple-music-test /tests/mcp_network.py
 docker exec apple-test touch /data/persistence-test
 docker stop -t 40 apple-test
 docker run --rm -v apple-test-data:/data --entrypoint /opt/venv/bin/python apple-music-test -c 'import json,pathlib; assert pathlib.Path("/data/persistence-test").exists(); json.load(open("/data/browser/chrome/Default/Preferences")); print("Profile persisted after clean shutdown: PASS")'
