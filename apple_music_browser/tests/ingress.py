@@ -82,6 +82,10 @@ with sync_playwright() as p:
         assert any(isinstance(frame, bytes) and frame.startswith(b'RFB ') for frame in frames), 'No VNC protocol data'
         seen = set()
         for response in responses:
+            if response.status == 302:
+                assert response.url == BASE
+                assert response.headers['location'] == 'vnc.html?autoconnect=true&resize=remote&path=websockify'
+                continue  # Chromium does not retain redirect response bodies.
             # noVNC optionally fetches these absent configuration files.
             if urlsplit(response.url).path.rsplit('/', 1)[-1] in {'defaults.json', 'mandatory.json'}:
                 assert response.status in {200, 404}
