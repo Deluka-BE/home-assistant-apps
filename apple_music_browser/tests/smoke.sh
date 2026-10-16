@@ -47,6 +47,7 @@ def rpc(method, params):
 assert 'result' in rpc('initialize',{'protocolVersion':'2025-03-26','capabilities':{},'clientInfo':{'name':'smoke','version':'1'}})
 tools=rpc('tools/list',{})['result']['tools']
 assert {t['name'] for t in tools} == {'play_song','control','now_playing','volume'}
+assert not rpc('tools/call',{'name':'now_playing','arguments':{}})['result'].get('isError',False)
 res=rpc('tools/call',{'name':'play_song','arguments':{'catalog_id':'playlist-test'}})
 assert res['result']['isError'] is True
 print('Ingress HTML, WebSocket, MCP initialize/list and playlist-input rejection: PASS')

@@ -55,6 +55,6 @@ A successful image build alone is not proof of full-track playback or audible ou
 
 ## Release gate
 
-Branch builds validate without publishing. Release publication must remain disabled
-until native ARM64 image and smoke tests pass and the account/HA audio limits are
-reviewed. Do not present an unverified DRM fallback as a working Apple Music player.
+Push builds publish only after native ARM64 image and smoke tests pass. Pull request
+builds validate without publishing. Account/HA audio limitations remain unverified
+by account-free CI. Do not present an unverified DRM fallback as a working Apple Music player.

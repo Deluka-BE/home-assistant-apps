@@ -23,8 +23,8 @@ jobs:
         run: docker build --platform linux/arm64 -t apple-music-test apple_music_browser
       - name: Verify browser, DRM capability, ingress and MCP without an account
         run: sh apple_music_browser/tests/smoke.sh
-      - name: Publish validated image from main
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      - name: Publish validated image
+        if: github.event_name == 'push'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_USER: ${{ github.actor }}
