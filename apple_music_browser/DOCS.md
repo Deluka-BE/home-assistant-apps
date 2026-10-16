@@ -189,3 +189,12 @@ Supervisor's source IP. It checks the redirect, CSS/JS/icon status, MIME and exa
 package content, browser module loading, a rendered connected noVNC canvas, and
 WebSocket RFB protocol data under the prefix. This models Ingress routing; it does
 not install the add-on on HAOS or verify a real HA session, Apple login or audio.
+
+## 0.1.2 release evidence
+
+Pre-publication native ARM64 [validation run 38951675815](https://github.com/Deluka-BE/home-assistant-apps/actions/runs/38951675815)
+passed the image build, authentication/configuration tests, TLS MCP tests through both
+sibling DNS and Docker host publishing (including reconnection after restart), Widevine,
+noVNC ingress and profile persistence. Publication remains gated by a fresh successful
+main-branch build and the same tests. This is CI evidence, not an on-device HAOS or
+Windows Inspector verification.

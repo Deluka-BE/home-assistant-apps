@@ -106,7 +106,7 @@ for attempt in $(seq 1 60); do
       -v apple-test-data:/data:ro -v apple-test-ssl:/ssl:ro \
       -v "$(pwd)/apple_music_browser/tests:/tests:ro" \
       --entrypoint /opt/venv/bin/python apple-music-test /tests/mcp_network.py
-    echo 'Authenticated TLS MCP reconnected after persistent-profile restart: PASS' 
+    echo 'Authenticated TLS MCP reconnected after persistent-profile restart: PASS'
     exit 0
   fi
   sleep 2
