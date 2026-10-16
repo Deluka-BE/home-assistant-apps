@@ -36,6 +36,13 @@ PY
 docker run --rm -i --network apple-test --ip 172.30.32.2 --entrypoint /opt/venv/bin/python apple-music-test - <<'PY'
 import json, socket, urllib.request
 base='http://172.30.32.3:8099'
+for port in (5900,6080,8765):
+    try:
+        leaked=socket.create_connection(('172.30.32.3',port),1)
+    except OSError:
+        continue
+    leaked.close()
+    raise AssertionError(f'Backend port {port} exposed')
 assert b'noVNC' in urllib.request.urlopen(base+'/vnc.html').read()
 s=socket.create_connection(('172.30.32.3',8099))
 s.sendall(b'GET /websockify HTTP/1.1\r\nHost: localhost\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\r\n')

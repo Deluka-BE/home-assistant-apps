@@ -33,7 +33,7 @@ for _ in range(100):
 else:
     raise RuntimeError("X display failed to start")
 start("openbox")
-start("x11vnc", "-display", ":0", "-localhost", "-forever", "-shared", "-nopw", "-rfbport", "5900")
+start("x11vnc", "-display", ":0", "-localhost", "-listen", "127.0.0.1", "-no6", "-forever", "-shared", "-nopw", "-rfbport", "5900")
 start("websockify", "127.0.0.1:6080", "127.0.0.1:5900")
 start("nginx", "-c", "/opt/addon/nginx.conf", "-g", "daemon off;")
 start("/opt/venv/bin/python", "/opt/addon/server.py")
