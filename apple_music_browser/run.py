@@ -10,7 +10,7 @@ for name in ("config", "browser", "cache"):
     Path("/data", name).mkdir(parents=True, exist_ok=True)
 children = []
 
-def stop(*_):
+def stop(*_, exit_code=0):
     for child in reversed(children):
         child.terminate()
     for child in children:
@@ -18,7 +18,7 @@ def stop(*_):
             child.wait(timeout=10)
         except subprocess.TimeoutExpired:
             child.kill()
-    raise SystemExit(0)
+    raise SystemExit(exit_code)
 
 signal.signal(signal.SIGTERM, stop)
 signal.signal(signal.SIGINT, stop)
@@ -41,4 +41,4 @@ start("/opt/venv/bin/python", "/opt/addon/server.py")
 while all(child.poll() is None for child in children):
     time.sleep(1)
 print("A required service exited; stopping container", flush=True)
-stop()
+stop(exit_code=1)
