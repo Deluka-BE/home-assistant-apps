@@ -12,6 +12,7 @@ from mcp.server.transport_security import TransportSecuritySettings
 from security import AuthenticatedMCP, load_settings
 from applemusic_mcp import browser, amp_api
 from applemusic_mcp.auth import save_user_token
+from playlist_ops import search_playlist_tracks, copy_playlist, replace_playlist_track, serialized
 
 mcp = FastMCP("Apple Music Browser", host="0.0.0.0", port=8765,
               stateless_http=True, json_response=True, max_request_body_size=65536,
@@ -81,6 +82,7 @@ def search_catalog(term: str, limit: int = 5) -> list[dict]:
 
 
 @mcp.tool()
+@serialized
 def create_playlist(name: str, description: str = "") -> tuple[bool, str]:
     """Create a new Apple Music playlist in the signed-in account."""
     if not name.strip():
@@ -89,6 +91,7 @@ def create_playlist(name: str, description: str = "") -> tuple[bool, str]:
 
 
 @mcp.tool()
+@serialized
 def rename_playlist(playlist_id: str, new_name: str) -> tuple[bool, str]:
     """Rename a playlist by its ID."""
     if not playlist_id.strip() or not new_name.strip():
@@ -97,6 +100,7 @@ def rename_playlist(playlist_id: str, new_name: str) -> tuple[bool, str]:
 
 
 @mcp.tool()
+@serialized
 def add_playlist_tracks(playlist_id: str, catalog_ids: list[str]) -> tuple[bool, str]:
     """Add catalog songs by their IDs to an existing playlist."""
     if not playlist_id.strip() or not catalog_ids or len(catalog_ids) > 100 or any(not x.isdigit() for x in catalog_ids):
@@ -105,6 +109,7 @@ def add_playlist_tracks(playlist_id: str, catalog_ids: list[str]) -> tuple[bool,
 
 
 @mcp.tool()
+@serialized
 def remove_playlist_track(playlist_id: str, relationship_id: str) -> tuple[bool, str]:
     """Remove a song from a playlist by its playlist-track relationship ID, not catalog ID."""
     if not playlist_id.strip() or not relationship_id.strip():
@@ -113,6 +118,7 @@ def remove_playlist_track(playlist_id: str, relationship_id: str) -> tuple[bool,
 
 
 @mcp.tool()
+@serialized
 def delete_playlist(playlist_id: str, confirm: bool = False) -> tuple[bool, str]:
     """Permanently delete a playlist by ID; requires explicit confirm=true."""
     if not playlist_id.strip() or not confirm:
@@ -127,6 +133,7 @@ def list_playlist_folders() -> list[dict]:
 
 
 @mcp.tool()
+@serialized
 def create_playlist_folder(name: str, parent_id: str = "p.playlistsroot") -> tuple[bool, str]:
     """Create a playlist folder."""
     if not name.strip():
@@ -135,11 +142,17 @@ def create_playlist_folder(name: str, parent_id: str = "p.playlistsroot") -> tup
 
 
 @mcp.tool()
+@serialized
 def move_playlist_to_folder(playlist_id: str, folder_id: str = "p.playlistsroot") -> tuple[bool, str]:
     """Move a playlist into a folder by ID."""
     if not playlist_id.strip() or not folder_id.strip():
         raise ValueError("Playlist and folder IDs required")
     return amp_api.move_playlist_to_folder(playlist_id, folder_id)
+
+
+mcp.tool()(search_playlist_tracks)
+mcp.tool()(copy_playlist)
+mcp.tool()(replace_playlist_track)
 
 
 def open_browser():

@@ -140,7 +140,7 @@ a session ID. Protocol versions 2025-03-26, 2025-06-18 and 2025-11-25 are tested
 GET/DELETE return authenticated 405 because no standalone SSE stream or session deletion
 is needed. Do not require legacy SSE or server-initiated notifications/resumption.
 Exactly four playback tools remain: `play_song`, `control`, `now_playing`, `volume`.
-No playlist operations or broad upstream server imports are added.
+Playlist and library tools use the pinned cross-platform AMP module; no broad upstream server imports are used.
 
 CI generates ephemeral secrets privately and tests missing/wrong authentication on all
 methods, origin rejection, TLS validation, initialize/version negotiation, SDK handshake,
@@ -151,7 +151,7 @@ loopback VNC isolation and persistence tests.
 This models HAOS bridge networking, not a real Supervisor installation or Windows test.
 
 On-device verification after updating: configure TLS/secret, restart, connect from Windows
-Inspector over the actual LAN URL, confirm missing/wrong tokens return 401, list the four
+Inspector over the actual LAN URL, confirm missing/wrong tokens return 401, list the playback and playlist
 tools and check `now_playing`. Confirm VNC ports 5900/6080 are unreachable over LAN and
 noVNC still opens through HA. Sign in normally, test a single song/transport/audio, restart
 and confirm login persistence. Later test the bridge's CA trust/header configuration from
@@ -201,3 +201,56 @@ sibling DNS and Docker host publishing (including reconnection after restart), W
 noVNC ingress and profile persistence. Publication remains gated by a fresh successful
 main-branch build and the same tests. This is CI evidence, not an on-device HAOS or
 Windows Inspector verification.
+
+## 0.1.4 phase 1: playlist workflows
+
+Three additional MCP tools use the existing pinned upstream AMP session, with no
+AppleScript or macOS dependency. The add-on image remains ARM64 only.
+
+- `search_playlist_tracks(playlist_id, term, limit=25)` searches only the specified
+  existing playlist, using case-insensitive title/artist substring matching. It reads
+  all pages before returning up to 100 matches in playlist order, including 1-based
+  positions, relationship IDs, library IDs and catalog IDs where available.
+- `copy_playlist(playlist_id, name, description="")` creates a new playlist and copies
+  its tracks in source order, in batches of 100. Catalog songs use catalog IDs;
+  uploads/unmatched library songs use typed library-song IDs. Missing usable IDs
+  fail before creation. The new description is caller-supplied; folders and other
+  source metadata are not copied. Empty playlists are supported. The final sequence
+  and count are checked. Apple may normalize duplicates/order or reject unavailable
+  tracks; a mismatch is reported as failure rather than silently claimed as success.
+- `replace_playlist_track(playlist_id, relationship_id, replacement_catalog_id)`
+  requires a unique original relationship and an ASCII numeric catalog replacement.
+  It adds the replacement, reads every page again, and requires the original sequence
+  plus one appended replacement before deleting the original relationship. Existing
+  replacement songs are allowed only when an additional appended occurrence is
+  verified. Missing/duplicate originals and same-song replacement are rejected.
+  Removal is verified with another complete read.
+
+Search read failures raise MCP tool errors, including authentication, throttling,
+malformed data and later-page errors. These workflows use strict reads because the
+pinned upstream `get_tracks` can silently return empty or partial results on failure.
+Existing tools retain their upstream behavior. Library IDs are never treated as
+catalog IDs; deletion uses the original relationship ID, never the replacement ID.
+
+Mutation results contain `ok`, `stage`, and `error` on failure. Copy also returns
+`playlist_id` and `submitted_tracks` (acknowledged submissions, not a verified final
+count). No automatic rollback deletes a partial copy or removes an added replacement.
+Inspect the reported playlist before retrying a failed operation: an API timeout can
+occur after Apple has accepted a write. Replacement reports `removal_attempted`;
+failures before that flag becomes true retain the original. Once DELETE is sent,
+a timeout or verification failure means the removal outcome is uncertain, so retaining
+the original cannot be guaranteed. There is no transactional API.
+
+Writes through this facade are serialized within one process. Concurrent edits from
+Apple clients or other processes cannot be locked; detected changes abort replacement
+before removal. An external edit between verification and deletion remains possible.
+Upstream removal uses `mode=all`, so repeated original relationship IDs are rejected
+before any write. Replacement appends at the end; restoring the original position
+would require unsupported reorder operations. There is no destructive rebuild fallback.
+AMP may reject writes to Music.app-created, smart, or curated playlists; no browser
+mutation fallback or universal playlist editability is claimed.
+
+Mocked unit tests cover pagination, error propagation, scoped search, mixed ID types,
+batching, empty/partial copy, add/verify/remove sequencing and failure retention.
+CI also checks the three new tool registrations over MCP. No real account, HAOS,
+Windows client, or live playlist mutation was used for development validation.
