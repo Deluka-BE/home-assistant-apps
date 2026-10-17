@@ -60,6 +60,16 @@ Maak vóór elke update een lokale back-up van de geïnstalleerde versie,
 add-onopties en add-ondata, en leg de geïnstalleerde image-digest vast voor
 herstel. Bewaar deze back-up veilig: opties kunnen tokens bevatten.
 
+## Gateway-logdiagnostiek (vanaf 0.2.30)
+
+De add-on logt bij het opstarten de configuratiebron, of Apple Music ingeschakeld is,
+of URL/token ingesteld zijn en of het opgegeven publieke TLS-certificaat
+beschikbaar en leesbaar is. Alle nieuwe Gateway- en providerdiagnostiek heeft
+een tijdstempel en logniveau. Bij Apple Music-discovery toont het log de status
+(`disabled`, `connected` of `failed`), een veilige foutcategorie en het aantal
+beschikbare upstream-tools. Identieke meldingen worden maximaal eenmaal per
+minuut herhaald. Tokens, certificaatinhoud en upstream-foutdetails worden niet gelogd.
+
 ## Optionele Node-RED JSONL-logreader
 
 Standaard uitgeschakeld. De MCP-add-on koppelt `/share` uitsluitend-lezen.
