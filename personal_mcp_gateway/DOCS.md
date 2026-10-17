@@ -41,6 +41,25 @@ Vul de add-onopties in via de Home Assistant-configuratie. De catalogusversie
 verwijst naar een al gepubliceerde image met een onveranderlijke versietag;
 historische tags worden niet overschreven.
 
+## Voorbereiding optionele Apple Music MCP
+
+Deze opties verbinden de bestaande Apple Music MCP via de Gateway vanaf versie `0.2.29`.
+Activeer de koppeling pas nadat de nieuwe image is gepubliceerd en geïnstalleerd.
+
+- `apple_music_mcp_enabled`: optionele schakelaar, standaard `false`.
+- `apple_music_mcp_url`: URL van de Apple Music MCP-server, standaard leeg.
+- `apple_music_mcp_token`: toegangstoken, standaard leeg. Het schema `password?`
+  maskeert de waarde in de interface; dit is geen versleuteling.
+- `apple_music_mcp_ca_file`: optioneel pad naar een expliciet vertrouwd TLS-certificaatbestand,
+  standaard leeg. Gebruik een persistent pad dat binnen de add-on leesbaar is,
+  bijvoorbeeld `/share/certs/apple-music-ca.pem`; `/share` is uitsluitend-lezen
+  gekoppeld. Zorg dat de runtimegebruiker (`10001:10001`) de mappen kan doorzoeken
+  en het bestand kan lezen, ook na vervanging van het certificaat.
+
+Maak vóór elke update een lokale back-up van de geïnstalleerde versie,
+add-onopties en add-ondata, en leg de geïnstalleerde image-digest vast voor
+herstel. Bewaar deze back-up veilig: opties kunnen tokens bevatten.
+
 ## Optionele Node-RED JSONL-logreader
 
 Standaard uitgeschakeld. De MCP-add-on koppelt `/share` uitsluitend-lezen.

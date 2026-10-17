@@ -1,5 +1,5 @@
 name: "Persoonlijke MCP HAOS"
-version: "0.2.28"
+version: "0.2.29"
 slug: "personal_mcp_gateway"
 description: "Persoonlijke Auth0-beveiligde MCP voor Hevy, iCloud Calendar, Spotify, Node-RED en Home Assistant"
 url: "https://github.com/Deluka-BE/home-assistant-apps"
@@ -42,6 +42,10 @@ options:
   spotify_client_id: ""
   spotify_client_secret: ""
   spotify_refresh_token: ""
+  apple_music_mcp_enabled: false
+  apple_music_mcp_url: ""
+  apple_music_mcp_token: ""
+  apple_music_mcp_ca_file: ""
   node_red_base_url: ""
   node_red_username: ""
   node_red_password: ""
@@ -64,6 +68,10 @@ schema:
   spotify_client_id: str?
   spotify_client_secret: password?
   spotify_refresh_token: password?
+  apple_music_mcp_enabled: bool?
+  apple_music_mcp_url: str?
+  apple_music_mcp_token: password?
+  apple_music_mcp_ca_file: str?
   node_red_base_url: url?
   node_red_username: str?
   node_red_password: password?
