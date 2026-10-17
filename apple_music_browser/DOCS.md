@@ -254,3 +254,85 @@ Mocked unit tests cover pagination, error propagation, scoped search, mixed ID t
 batching, empty/partial copy, add/verify/remove sequencing and failure retention.
 CI also checks the three new tool registrations over MCP. No real account, HAOS,
 Windows client, or live playlist mutation was used for development validation.
+
+## 0.1.5 phase 2: migration matching and read-only discovery
+
+This is a staged release, not completion of every migration operation. Twelve new
+read-only tools bring the MCP registration count to 31. Existing playback and
+playlist tools retain their 0.1.4 behavior. The new tools use the public Apple Music
+API routes already used by the pinned upstream server, with `amp_api._headers()`:
+the captured web-player token, captured music-user-token and music.apple.com Origin.
+They do not prefer a generated developer token, import upstream's macOS server,
+launch a browser, or change authentication/settings. The upstream pin remains
+[`6226528`](https://github.com/epheterson/applemusic-mcp/tree/6226528a37e8fa7e0ec72e3e96dd280bef20d532).
+
+| New tool | Supported operation and boundaries |
+| --- | --- |
+| `resolve_isrc(isrcs, storefront="us")` | 1..100 ISRCs, deduplicated and normalized for case/hyphens; batches of 25. Returns every unique catalog candidate per ISRC, explicit `missing` and `ambiguous` lists. No automatic release selection. |
+| `catalog_identifiers(identifiers, content_type="songs", storefront="us")` | Batch song, album or artist details for 1..100 ASCII numeric IDs. Deduplicates inputs and reports missing IDs. Includes raw Apple metadata, such as duration, ISRC, album, content rating, play parameters and relationships when supplied. This is also the single-item details tool. |
+| `album_tracks(album_id, storefront="us", limit=25, cursor="")` | One page of catalog album tracks in Apple's order. |
+| `artist_discovery(artist_id, view="top-songs", storefront="us", limit=25, cursor="")` | Exact artist ID; `top-songs` or `similar-artists` view where available. No first-name-search-hit matching. |
+| `catalog_genres(storefront="us", limit=25, cursor="")` | One catalog genre page. |
+| `catalog_suggestions(term, storefront="us")` | Up to 10 search-term suggestions. These are not migration matches. |
+| `browse_library(content_type="songs", limit=25, cursor="")` | Library songs, albums, artists or music-videos; library IDs remain distinct from catalog IDs. |
+| `library_history(kind="recently-added", limit=25, cursor="")` | Recently added library resources or `recently-played` tracks where Apple supplies history. No locally reconstructed history. |
+| `music_recommendations(kind="recommendations", limit=10, cursor="")` | Recommendation groups or `heavy-rotation`; preserves nested contents and relationships. Group count is not song count. |
+| `music_charts(content_type="songs", storefront="us", limit=25)` | Songs, albums or music-videos; explicitly first page only, retaining chart metadata and nested next links. Continuation is not exposed. |
+| `account_storefront()` | Authenticated `/me/storefront`, with no preference mutation. |
+| `session_diagnostics()` | One storefront probe, or cached throttle result. Returns API accessibility and sanitized error; no tokens, paths, browser cookies, settings dump or audit history. Does not prove playback/subscription capability. |
+
+Catalog storefront is explicit and defaults to `us`, matching upstream's default;
+it is **not inferred from the account**. Read `account_storefront` and pass the
+returned country ID for migration matching. Catalog availability differs by country.
+One ISRC can identify several releases; compare all candidates' album, duration,
+explicit status and availability before choosing a catalog ID. A successful empty
+lookup is different from a failed lookup. Input duplicates make no extra requests.
+These reads are idempotent with respect to account state, but Apple's results can change.
+
+Paged tools return `{data, next}` with raw Apple resources. Except recommendations
+(1..10), page limits are 1..25. Pass the returned `next` as `cursor` with the same
+tool arguments to request the next page. Continuations must use the exact API host,
+route, filters and page size and an increasing numeric offset; unexpected cursor
+formats fail closed. Relationship pagination inside a returned resource is retained
+but not automatically followed. Catalog ID and ISRC matching follow top-level pages
+to completion, with a maximum of 100 pages per batch. If a later page or batch fails,
+the call raises an error and returns no partial match/missing report.
+
+New HTTP reads have a 30-second upstream timeout, reject redirects and never retry.
+401/403 report authorization/access problems; 404 reports resource/endpoint
+unavailability, not an empty library or un-rated item; 429 reports throttling and
+records the public API rail. Recent throttling on that rail prevents further probes.
+Other failures and malformed JSON/data also raise tool errors. Raw HTTP bodies,
+headers and exception strings are not included in errors. An unsupported region,
+subscription, endpoint or session may prevent a particular read; mocked coverage
+does not establish live support for every account. Existing upstream wrappers still
+have their original error handling; these stronger guarantees apply to the new tools.
+
+### Explicit remainder and unsupported operations
+
+| Requested operation | Status after 0.1.5 |
+| --- | --- |
+| Library add song/album | Deferred to the next mutation stage. Upstream `_add_to_library_api` supplies the route; needs bounded batching, idempotency and ambiguous-outcome tests before exposure. |
+| Remove library item with confirmation | Deferred. Pinned AMP verifies **song** removal by library ID only. Generic album/artist library deletion is not established and must not be invented. |
+| Delete playlist folder with confirmation | Deferred. AMP supplies `delete_folder`; root-folder protection, confirmation, child handling and uncertain-outcome behavior still need implementation/tests. |
+| Ratings/favorites | Deferred web love/dislike/clear and rating reads; AMP supplies `rate` and `get_rating`, but `get_rating` currently conflates failures with unrated. Five-star ratings and the native favorites listing are macOS-only upstream and unsupported here. Do not equate a rating write with a verified favorites-list API. |
+| Safe settings/audit diagnostics | Only minimal session/API accessibility is delivered. Settings inspection, an allowlisted audit summary and audit recording/redaction policy are deferred. No raw audit/token/config files are exposed. |
+| Charts continuation / nested relationship traversal | Not exposed in this stage. First-page charts are explicitly labeled. |
+| Fuzzy migration matching, UPC or Spotify ID conversion | Not exposed. Use ISRCs or known Apple catalog IDs; missing ISRCs need a separately reviewed metadata matcher. |
+| Native operations | No AppleScript, native star ratings, native snapshots, playlist reorder, unsupported generic delete, or fabricated endpoints. |
+
+Capability inspection covered upstream `amp_api.py` (web-session operations) and
+`server.py` (catalog resolve/details, library browse/history/add, discovery and
+ratings). The upstream server mixes API and native behavior, so it is deliberately
+not imported by this facade. New routes are implemented as small strict reads rather
+than reusing formatting helpers that can suppress errors or select the first match.
+
+Local validation: 30 account-free unit tests, including every new tool, real
+FastMCP schema registration, existing playlist workflows and TLS/auth configuration.
+Coverage includes ISRC ambiguity/batching, missing IDs, later-page failures, unsafe
+cursors, non-advancing pagination, redirects, 401/403/404/429/500, malformed responses,
+sanitized diagnostics and version agreement. Native ARM64 build, network MCP,
+Widevine/ingress smoke tests and publication remain CI gates; they were not run in
+the development sandbox, which has no Docker. CI checks both release and commit image
+tags and refuses overwrite or an inconclusive registry response. No account mutations,
+HAOS installation, Windows live test or bridge changes are part of this release.

@@ -11,6 +11,7 @@ RUN test "$TARGETARCH" = arm64 \
  && python3 -m venv /opt/venv \
  && /opt/venv/bin/pip install --no-cache-dir /opt/upstream 'mcp==1.30.0' \
  && rm -rf /var/lib/apt/lists/* /opt/upstream/.git
-COPY server.py playlist_ops.py security.py run.py nginx.conf /opt/addon/
-LABEL io.hass.name="Apple Music Browser" io.hass.description="Apple Music browser control using upstream applemusic-mcp" io.hass.arch="aarch64" io.hass.type="addon" io.hass.version="0.1.4"
+COPY server.py playlist_ops.py discovery.py security.py run.py nginx.conf /opt/addon/
+COPY release.json config.yaml Dockerfile /opt/addon/
+LABEL io.hass.name="Apple Music Browser" io.hass.description="Apple Music browser control using upstream applemusic-mcp" io.hass.arch="aarch64" io.hass.type="addon" io.hass.version="0.1.5"
 ENTRYPOINT ["/usr/bin/tini", "--", "/opt/venv/bin/python", "/opt/addon/run.py"]

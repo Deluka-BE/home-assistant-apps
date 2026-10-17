@@ -13,6 +13,8 @@ from security import AuthenticatedMCP, load_settings
 from applemusic_mcp import browser, amp_api
 from applemusic_mcp.auth import save_user_token
 from playlist_ops import search_playlist_tracks, copy_playlist, replace_playlist_track, serialized
+import discovery
+from mcp.types import ToolAnnotations
 
 mcp = FastMCP("Apple Music Browser", host="0.0.0.0", port=8765,
               stateless_http=True, json_response=True, max_request_body_size=65536,
@@ -153,6 +155,11 @@ def move_playlist_to_folder(playlist_id: str, folder_id: str = "p.playlistsroot"
 mcp.tool()(search_playlist_tracks)
 mcp.tool()(copy_playlist)
 mcp.tool()(replace_playlist_track)
+
+for tool_name in discovery.READ_TOOLS:
+    mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False,
+                                        idempotentHint=True, openWorldHint=True))(
+        getattr(discovery, tool_name))
 
 
 def open_browser():

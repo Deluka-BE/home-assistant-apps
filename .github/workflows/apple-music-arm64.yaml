@@ -34,6 +34,18 @@ jobs:
           printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$GH_USER" --password-stdin
           version=$(python3 -c 'import json; print(json.load(open("apple_music_browser/release.json"))["version"])')
           image=ghcr.io/deluka-be/ha-apple-music-browser-aarch64
+          # Fail closed on existing tags or an ambiguous registry/auth failure.
+          # Never retry publication by overwriting a version or commit tag.
+          for tag in "$version" "sha-$GITHUB_SHA"; do
+            if docker manifest inspect "$image:$tag" > /tmp/apple-music-manifest 2>&1; then
+              echo "Refusing to overwrite existing image tag: $tag" >&2
+              exit 1
+            fi
+            if ! grep -q 'manifest unknown' /tmp/apple-music-manifest; then
+              echo "Cannot establish that image tag is absent; publication stopped" >&2
+              exit 1
+            fi
+          done
           docker tag apple-music-test "$image:$version"
           docker tag apple-music-test "$image:sha-$GITHUB_SHA"
           docker push "$image:$version"

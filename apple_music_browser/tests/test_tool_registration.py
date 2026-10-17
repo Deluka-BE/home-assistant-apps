@@ -24,7 +24,16 @@ class RegistrationTests(unittest.TestCase):
             spec.loader.exec_module(facade)
         async def check():
             tools = {tool.name: tool for tool in await facade.mcp.list_tools()}
-            self.assertEqual(len(tools), 19)
+            discovery = facade.discovery
+            self.assertEqual(len(tools), 19 + len(discovery.READ_TOOLS))
+            for name in discovery.READ_TOOLS:
+                self.assertIn(name, tools)
+                self.assertTrue(tools[name].annotations.readOnlyHint)
+                self.assertTrue(tools[name].annotations.idempotentHint)
+                self.assertFalse(tools[name].annotations.destructiveHint)
+            self.assertEqual(tools['catalog_identifiers'].inputSchema['required'], ['identifiers'])
+            self.assertEqual(tools['resolve_isrc'].inputSchema['required'], ['isrcs'])
+            self.assertEqual(tools['artist_discovery'].inputSchema['properties']['view']['enum'], ['top-songs', 'similar-artists'])
             for name, required in (
                 ('search_playlist_tracks', ['playlist_id', 'term']),
                 ('copy_playlist', ['playlist_id', 'name']),
