@@ -14,6 +14,8 @@ from applemusic_mcp import browser, amp_api
 from applemusic_mcp.auth import save_user_token
 from playlist_ops import search_playlist_tracks, copy_playlist, replace_playlist_track, serialized
 import discovery
+import web_ops
+import local_tools
 from mcp.types import ToolAnnotations
 
 mcp = FastMCP("Apple Music Browser", host="0.0.0.0", port=8765,
@@ -160,6 +162,14 @@ for tool_name in discovery.READ_TOOLS:
     mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False,
                                         idempotentHint=True, openWorldHint=True))(
         getattr(discovery, tool_name))
+
+for module in (web_ops, local_tools):
+    for tool_name in (*module.READ_TOOLS, *module.WRITE_TOOLS):
+        write = tool_name in module.WRITE_TOOLS
+        destructive = tool_name in {"remove_library_song", "delete_playlist_folder", "set_web_rating", "clear_catalog_cache"}
+        mcp.tool(annotations=ToolAnnotations(readOnlyHint=not write, destructiveHint=destructive,
+                                            idempotentHint=not write, openWorldHint=True))(
+            local_tools.audited(getattr(module, tool_name), write=write))
 
 
 def open_browser():

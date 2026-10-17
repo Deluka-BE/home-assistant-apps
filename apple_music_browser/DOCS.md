@@ -310,7 +310,7 @@ have their original error handling; these stronger guarantees apply to the new t
 
 ### Explicit remainder and unsupported operations
 
-| Requested operation | Status after 0.1.5 |
+| Requested operation | Status at 0.1.5 (superseded by 0.1.6 below) |
 | --- | --- |
 | Library add song/album | Deferred to the next mutation stage. Upstream `_add_to_library_api` supplies the route; needs bounded batching, idempotency and ambiguous-outcome tests before exposure. |
 | Remove library item with confirmation | Deferred. Pinned AMP verifies **song** removal by library ID only. Generic album/artist library deletion is not established and must not be invented. |
@@ -327,12 +327,105 @@ ratings). The upstream server mixes API and native behavior, so it is deliberate
 not imported by this facade. New routes are implemented as small strict reads rather
 than reusing formatting helpers that can suppress errors or select the first match.
 
-Local validation: 30 account-free unit tests, including every new tool, real
+The earlier release report claimed 30 account-free unit tests, including every new tool, real
 FastMCP schema registration, existing playlist workflows and TLS/auth configuration.
 Coverage includes ISRC ambiguity/batching, missing IDs, later-page failures, unsafe
 cursors, non-advancing pagination, redirects, 401/403/404/429/500, malformed responses,
-sanitized diagnostics and version agreement. Native ARM64 build, network MCP,
+sanitized diagnostics and version agreement. That historical local claim was not
+reproducible in an independent host environment: discovery reported 29 tests with
+two import errors because Starlette/Uvicorn were absent. It must not be treated as
+a green host test result. Version 0.1.6 adds an explicit dependency preflight and
+runs verification in a disposable Debian dependency environment instead.
+Native ARM64 build, network MCP,
 Widevine/ingress smoke tests and publication remain CI gates; they were not run in
 the development sandbox, which has no Docker. CI checks both release and commit image
 tags and refuses overwrite or an inconclusive registry response. No account mutations,
 HAOS installation, Windows live test or bridge changes are part of this release.
+
+## 0.1.6: remaining supported web operations
+
+Thirteen additional tools bring registration to **44 tools**. All routes come from
+the pinned upstream `amp_api.py`, `_add_to_library_api` and folder children reads;
+the native upstream server is never imported. Apple documents the public
+[ratings API](https://developer.apple.com/documentation/applemusicapi/ratings-api);
+this facade follows upstream's captured-session AMP transport for ratings.
+The add-on remains ARM64 only; the web operations themselves have no macOS dependency.
+
+| Tool | Exact support |
+| --- | --- |
+| `add_library_catalog(catalog_ids, content_type="songs", storefront="us")` | 1..100 ASCII numeric catalog IDs, deduplicated, songs or albums only. Fresh complete catalog validation in the explicit storefront must find every ID before a single POST to public `/me/library` with `ids[songs]` or `ids[albums]`. No fuzzy match, hidden batch loop, automatic retry or rollback. Adding an album can add its tracks. |
+| `remove_library_song(library_song_id, confirm=false)` | Exactly one `i.*` library song ID, never a catalog ID or batch/query selector. Requires JSON boolean `confirm=true`. Sends one AMP DELETE for that song. Removal can affect playlists containing that library song; there is no undo. |
+| `delete_playlist_folder(folder_id, confirm=false)` | Exactly one `p.*` folder ID; root `p.playlistsroot` is forbidden. Requires JSON boolean `confirm=true` and a successful children response with empty `data` and no continuation. Nonempty, partial, malformed or unavailable children reads prevent DELETE. Move children individually first. No recursive delete, move or cascade fallback. |
+| `web_rating(catalog_id, content_type="songs")` | Exact song/album catalog ID. Successful empty `data` means unrated; one valid rating means love (+1) or dislike (-1). Auth, network, 404 and malformed responses remain errors rather than becoming unrated. |
+| `set_web_rating(catalog_id, action, content_type="songs", confirm=false)` | Actions `love`, `favorite`, `dislike`, `clear`. `favorite` is an explicit alias for the upstream +1 love write, not a separate favorites-list guarantee. Clear requires JSON boolean `confirm=true`; love/favorite/dislike overwrite the prior web rating when explicitly called. No native stars. |
+| `web_auth_diagnostics()` | One strict AMP playlists probe (`limit=1`), or cached throttle response. Complements public-API `session_diagnostics`. Reports access/error only; no credential claims, tokens, headers, cookies, private paths or subscription/playback guarantees. No login reset. |
+| `browser_settings_info()` | Current web-player volume/shuffle/repeat via upstream browser settings. May initialize the signed-in player. |
+| `set_browser_settings(volume=-1, shuffle=null, repeat=null)` | Volume 0..100 (-1 leaves it), boolean shuffle, repeat `none`/`one`/`all`. Uses the same browser owner as playback. No native settings, audio output routing or quality selection. |
+| `local_preferences()` | Only facade cache TTL, entry count, capacity and process-local scope. Never upstream config or account preferences. |
+| `set_local_preferences(cache_ttl_seconds)` | Opt in to 0..300 seconds of catalog metadata caching; default 0 (off). Clears existing entries. Preferences reset on process restart and do not change storefront, engine, login, auto-add or content filtering. |
+| `cached_catalog_identifiers(identifiers, content_type="songs", storefront="us")` | Same bounded catalog validation/metadata as `catalog_identifiers`, with optional cache keyed by explicit storefront, resource type and ordered deduplicated IDs. Returns `cached` and `age_seconds`. At most 128 entries; expired entries are removed, returned values are detached copies, and failures are never cached. This cache is not consulted for write validation. |
+| `clear_catalog_cache(confirm=false)` | JSON boolean `confirm=true` clears only the facade's memory cache. No filesystem deletion, browser-profile clearing, logout, credential changes, upstream-cache clearing or audit deletion. |
+| `audit_summary(limit=20)` | Last 1..100 events for the thirteen new tools in this process. Bounded to 100 fixed tool names, sequence numbers, timestamps and `returned`/`error` outcomes. No arguments, IDs, metadata, results, error strings, secrets or existing upstream audit files. Not a durable account history. Schema rejection before tool dispatch is not recorded. |
+
+The new account writes reject redirects, respect per-rail throttling, use the
+upstream 30-second timeout and captured origin-bound web headers, and never retry.
+They do not call upstream error formatters that log HTTP bodies. Errors are sanitized
+and never return raw transport exceptions or response bodies. Successful write
+results contain `acknowledged=true`, HTTP `status`, and `verified=false`: even 202 is
+only acceptance, not proof of completed synchronization. Invalid JSON/API errors in
+a successful response remain failures. A timeout or failed response may occur after
+Apple applied the change. Inspect account state before repeating any write; there
+is no automatic cleanup or rollback. Repeating a request is never offered as an
+exactly-once operation. Catalog availability checks do not prove library completion.
+
+New library/folder/rating writes share the existing process write lock. Other Apple
+clients can still edit concurrently. In particular, an external edit between the
+empty-folder check and DELETE cannot be locked or conditionally protected by this
+API. Only delete a folder while other clients are not changing it. The facade never
+intentionally deletes a populated folder; it cannot guarantee Apple's concurrent
+child behavior. If the children route is unsupported for an account, deletion fails
+closed. An attempted write through any new write tool clears the facade catalog
+cache, including on failure. Existing 0.1.5 tools retain their original behavior;
+their calls are outside the new audit scope.
+
+Unsupported: generic library album/artist deletion, bulk or whole-library deletion,
+nonempty/recursive folder deletion, native 1..5 star ratings, favorites listing or
+verification of a favorites collection, native snapshots/reorder, Music.app and
+AppleScript, native engine preferences, account settings mutation, durable audit
+history/preferences, raw settings/audit files, upstream track/export/cache cleanup,
+login/logout/reset, token renewal controls, chart continuation and nested relationship
+traversal. No speculative endpoints or automatic fallback to native/UI writes.
+
+### Dependency-aware verification and release
+
+`tests/run_unit.py` checks installed upstream 0.20.3 and MCP 1.30.0 and explicitly
+imports Starlette, Uvicorn, Playwright and the upstream AMP/browser modules before
+discovering **all** `test_*.py` files. CI first runs `pip check`, then this runner
+inside the built add-on image. Missing dependencies/import failures fail the gate;
+there are no skip-on-import checks. The Dockerfile still installs upstream at commit
+`6226528a37e8fa7e0ec72e3e96dd280bef20d532` and MCP 1.30.0.
+
+Development verification uses a disposable **Debian trixie, Python 3.13** container
+with that exact upstream commit and full dependency installation, including
+Starlette/Uvicorn/Playwright; the musl worker cannot install the upstream Playwright
+distribution and is not used to claim green unit tests. This Debian x86_64 test is
+dependency-equivalent to the image's Python environment, not an ARM64 image/browser
+or HAOS test. The final 0.1.6 development run passed **49 tests with no errors or
+skips**, plus `pip check`; installed Starlette 1.8.0, Uvicorn 0.54.0 and Playwright
+1.64.0 imported successfully. Coverage includes failed/ambiguous writes, redirects,
+HTTP/auth/throttle failures, malformed responses, catalog preflight refusal,
+confirmation including SDK coercion rejection, folder/root safeguards, bounded
+cache isolation/expiry and audit redaction. These are mocked account operations,
+not proof of live Apple behavior. The same runner can be invoked as:
+
+```sh
+PYTHONPATH=apple_music_browser /path/to/venv/bin/python apple_music_browser/tests/run_unit.py
+```
+
+The network MCP smoke test now asserts all 44 registrations and checks invalid
+library IDs, unconfirmed destructive calls, root-folder deletion and safe local
+diagnostics without making any Apple account request. Full native ARM64 build,
+Widevine, ingress, sibling-DNS/published-port TLS MCP tests and publication remain
+the main-push CI gates. Version and commit image tags retain the existing fail-closed
+overwrite protections. No HAOS installation, real account mutation, Windows live
+test or bridge modification is included.

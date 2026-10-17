@@ -53,12 +53,26 @@ async def main():
                     await session.send_ping()
                     assert session_id() is None
                     tools = await session.list_tools()
-                    assert {t.name for t in tools.tools} == {'play_song', 'control', 'now_playing', 'volume', 'list_playlists', 'playlist_tracks', 'search_library', 'search_catalog', 'create_playlist', 'rename_playlist', 'add_playlist_tracks', 'remove_playlist_track', 'delete_playlist', 'list_playlist_folders', 'create_playlist_folder', 'move_playlist_to_folder', 'search_playlist_tracks', 'copy_playlist', 'replace_playlist_track', 'catalog_identifiers', 'resolve_isrc', 'album_tracks', 'artist_discovery', 'catalog_genres', 'catalog_suggestions', 'browse_library', 'library_history', 'music_recommendations', 'music_charts', 'account_storefront', 'session_diagnostics'}
+                    expected_new = {'add_library_catalog', 'remove_library_song', 'delete_playlist_folder',
+                                    'web_rating', 'set_web_rating', 'web_auth_diagnostics',
+                                    'browser_settings_info', 'set_browser_settings', 'local_preferences',
+                                    'set_local_preferences', 'audit_summary', 'cached_catalog_identifiers', 'clear_catalog_cache'}
+                    assert {t.name for t in tools.tools} == expected_new | {'play_song', 'control', 'now_playing', 'volume', 'list_playlists', 'playlist_tracks', 'search_library', 'search_catalog', 'create_playlist', 'rename_playlist', 'add_playlist_tracks', 'remove_playlist_track', 'delete_playlist', 'list_playlist_folders', 'create_playlist_folder', 'move_playlist_to_folder', 'search_playlist_tracks', 'copy_playlist', 'replace_playlist_track', 'catalog_identifiers', 'resolve_isrc', 'album_tracks', 'artist_discovery', 'catalog_genres', 'catalog_suggestions', 'browse_library', 'library_history', 'music_recommendations', 'music_charts', 'account_storefront', 'session_diagnostics'}
                     assert not (await session.call_tool('now_playing', {})).isError
                     assert (await session.call_tool('play_song', {'catalog_id': 'playlist-test'})).isError
                     # Invalid migration inputs must fail before any Apple request.
                     assert (await session.call_tool('resolve_isrc', {'isrcs': ['invalid']})).isError
                     assert (await session.call_tool('catalog_identifiers', {'identifiers': ['i.library']})).isError
+                    for tool, args in (
+                        ('add_library_catalog', {'catalog_ids': ['i.library']}),
+                        ('remove_library_song', {'library_song_id': 'i.fixture'}),
+                        ('delete_playlist_folder', {'folder_id': 'p.playlistsroot', 'confirm': True}),
+                        ('set_web_rating', {'catalog_id': '123', 'action': 'clear'}),
+                        ('clear_catalog_cache', {}),
+                    ):
+                        assert (await session.call_tool(tool, args)).isError
+                    assert not (await session.call_tool('local_preferences', {})).isError
+                    assert not (await session.call_tool('audit_summary', {})).isError
         print('TLS auth, protocol negotiation, SDK initialize/ping/list/call: PASS (' + base + ')')
 
 asyncio.run(main())
