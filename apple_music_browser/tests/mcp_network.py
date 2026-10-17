@@ -57,9 +57,10 @@ async def main():
                                     'web_rating', 'set_web_rating', 'web_auth_diagnostics',
                                     'browser_settings_info', 'set_browser_settings', 'local_preferences',
                                     'set_local_preferences', 'audit_summary', 'cached_catalog_identifiers', 'clear_catalog_cache'}
-                    assert {t.name for t in tools.tools} == expected_new | {'play_song', 'control', 'now_playing', 'volume', 'list_playlists', 'playlist_tracks', 'search_library', 'search_catalog', 'create_playlist', 'rename_playlist', 'add_playlist_tracks', 'remove_playlist_track', 'delete_playlist', 'list_playlist_folders', 'create_playlist_folder', 'move_playlist_to_folder', 'search_playlist_tracks', 'copy_playlist', 'replace_playlist_track', 'catalog_identifiers', 'resolve_isrc', 'album_tracks', 'artist_discovery', 'catalog_genres', 'catalog_suggestions', 'browse_library', 'library_history', 'music_recommendations', 'music_charts', 'account_storefront', 'session_diagnostics'}
-                    assert not (await session.call_tool('now_playing', {})).isError
-                    assert (await session.call_tool('play_song', {'catalog_id': 'playlist-test'})).isError
+                    assert {t.name for t in tools.tools} == expected_new | {'list_playlists', 'playlist_tracks', 'search_library', 'search_catalog', 'create_playlist', 'rename_playlist', 'add_playlist_tracks', 'remove_playlist_track', 'delete_playlist', 'list_playlist_folders', 'create_playlist_folder', 'move_playlist_to_folder', 'search_playlist_tracks', 'copy_playlist', 'replace_playlist_track', 'catalog_identifiers', 'resolve_isrc', 'album_tracks', 'artist_discovery', 'catalog_genres', 'catalog_suggestions', 'browse_library', 'library_history', 'music_recommendations', 'music_charts', 'account_storefront', 'session_diagnostics'}
+                    assert len(tools.tools) == 40
+                    for name in ('play_song', 'control', 'now_playing', 'volume'):
+                        assert (await session.call_tool(name, {})).isError
                     # Invalid migration inputs must fail before any Apple request.
                     assert (await session.call_tool('resolve_isrc', {'isrcs': ['invalid']})).isError
                     assert (await session.call_tool('catalog_identifiers', {'identifiers': ['i.library']})).isError

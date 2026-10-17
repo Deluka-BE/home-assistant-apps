@@ -23,7 +23,6 @@ mcp = FastMCP("Apple Music Browser", host="0.0.0.0", port=8765,
               transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False))
 
 
-@mcp.tool()
 def play_song(catalog_id: str) -> tuple[bool, str]:
     """Play one catalog song by numeric Apple Music ID. Requires web sign-in."""
     if not catalog_id.isascii() or not catalog_id.isdigit():
@@ -31,7 +30,6 @@ def play_song(catalog_id: str) -> tuple[bool, str]:
     return browser.play_catalog_track(catalog_id)
 
 
-@mcp.tool()
 def control(action: str, seconds: float = 0) -> tuple[bool, str]:
     """Playback transport: play, pause, stop, next, previous, seek."""
     if action not in {"play", "pause", "stop", "next", "previous", "seek"}:
@@ -41,13 +39,11 @@ def control(action: str, seconds: float = 0) -> tuple[bool, str]:
     return browser.playback_control(action, seconds)
 
 
-@mcp.tool()
 def now_playing() -> dict | None:
     """Current playing track. Does not read library or playlists."""
     return browser.now_playing()
 
 
-@mcp.tool()
 def volume(level: int) -> tuple[bool, str]:
     """Set player volume from 0 to 100."""
     if not 0 <= level <= 100:

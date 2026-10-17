@@ -24,10 +24,18 @@ class RegistrationTests(unittest.TestCase):
             spec.loader.exec_module(facade)
         async def check():
             tools = {tool.name: tool for tool in await facade.mcp.list_tools()}
+            self.assertEqual(len(tools), 40)
+            for name in ('play_song', 'control', 'now_playing', 'volume'):
+                self.assertNotIn(name, tools)
+                self.assertTrue(callable(getattr(facade, name)))
+                with self.assertRaises(Exception):
+                    await facade.mcp.call_tool(name, {})
+            self.assertIn('browser_settings_info', tools)
+            self.assertIn('set_browser_settings', tools)
             discovery = facade.discovery
             added = (*facade.web_ops.READ_TOOLS, *facade.web_ops.WRITE_TOOLS,
                      *facade.local_tools.READ_TOOLS, *facade.local_tools.WRITE_TOOLS)
-            self.assertEqual(len(tools), 19 + len(discovery.READ_TOOLS) + len(added))
+            self.assertEqual(len(tools), 15 + len(discovery.READ_TOOLS) + len(added))
             for module in (facade.web_ops, facade.local_tools):
                 for name in module.READ_TOOLS:
                     self.assertTrue(tools[name].annotations.readOnlyHint)

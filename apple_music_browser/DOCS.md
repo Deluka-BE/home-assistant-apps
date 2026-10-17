@@ -139,7 +139,9 @@ Clients initialize normally, send `notifications/initialized`, and may call tool
 a session ID. Protocol versions 2025-03-26, 2025-06-18 and 2025-11-25 are tested.
 GET/DELETE return authenticated 405 because no standalone SSE stream or session deletion
 is needed. Do not require legacy SSE or server-initiated notifications/resumption.
-Exactly four playback tools remain: `play_song`, `control`, `now_playing`, `volume`.
+Version 0.1.7 exposes 40 MCP tools. Playback tools `play_song`, `control`,
+`now_playing` and `volume` are no longer registered; their implementations remain
+in the code. Browser settings tools remain available.
 Playlist and library tools use the pinned cross-platform AMP module; no broad upstream server imports are used.
 
 CI generates ephemeral secrets privately and tests missing/wrong authentication on all
@@ -151,8 +153,8 @@ loopback VNC isolation and persistence tests.
 This models HAOS bridge networking, not a real Supervisor installation or Windows test.
 
 On-device verification after updating: configure TLS/secret, restart, connect from Windows
-Inspector over the actual LAN URL, confirm missing/wrong tokens return 401, list the playback and playlist
-tools and check `now_playing`. Confirm VNC ports 5900/6080 are unreachable over LAN and
+Inspector over the actual LAN URL, confirm missing/wrong tokens return 401, list the 40 tools, confirm the four playback tools are absent, and check
+`local_preferences`. Confirm VNC ports 5900/6080 are unreachable over LAN and
 noVNC still opens through HA. Sign in normally, test a single song/transport/audio, restart
 and confirm login persistence. Later test the bridge's CA trust/header configuration from
 its own container. Account, audio, real HAOS routing, Windows Inspector and ChatGPT bridging
@@ -422,10 +424,34 @@ not proof of live Apple behavior. The same runner can be invoked as:
 PYTHONPATH=apple_music_browser /path/to/venv/bin/python apple_music_browser/tests/run_unit.py
 ```
 
-The network MCP smoke test now asserts all 44 registrations and checks invalid
+The network MCP smoke test now asserts all 40 registrations and checks invalid
 library IDs, unconfirmed destructive calls, root-folder deletion and safe local
 diagnostics without making any Apple account request. Full native ARM64 build,
 Widevine, ingress, sibling-DNS/published-port TLS MCP tests and publication remain
 the main-push CI gates. Version and commit image tags retain the existing fail-closed
 overwrite protections. No HAOS installation, real account mutation, Windows live
 test or bridge modification is included.
+
+
+## 0.1.7: playback MCP registrations removed
+
+Removed only the registrations for `play_song`, `control`, `now_playing` and
+`volume`, reducing the exposed MCP list from 44 to 40 tools. Their function bodies
+and underlying browser implementation remain intact. All other registrations,
+including `browser_settings_info` and `set_browser_settings`, remain available.
+Registration and network checks assert the count and reject calls to these four
+unregistered names.
+
+The user-supplied blue Apple/circuit artwork is pending transfer from the ChatGPT
+attachment. No replacement has been generated or installed. Transfer the exact
+original 1254 × 1254 RGBA PNG with transparency to
+`apple_music_browser/icon.png` and `apple_music_browser/logo.png` in this repository
+(use identical original bytes for both). These asset files are not included in
+this code-only release.
+
+Version 0.1.7 development validation passed all 49 mocked unit tests with no
+failures or skips, dependency preflight and `pip check` in a disposable Debian
+trixie x86_64/Python 3.13 container using the pinned upstream revision and MCP
+1.30.0. An AST comparison confirmed that the server differs only by the four
+removed registration decorators. Native ARM64/browser and sibling-container TLS
+network smoke tests remain CI checks; they were not run in this development test.
