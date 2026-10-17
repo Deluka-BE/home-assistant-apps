@@ -11,11 +11,12 @@ tracks. A real click on Play may be needed after browser startup.
 
 The pinned upstream epheterson/applemusic-mcp browser engine owns the visible browser
 and its Playwright connection. noVNC presents that same browser; it is not a separate
-browser experiment. The restricted MCP facade calls upstream browser functions for
-song playback, transport, current track and volume. It does not import upstream's
-full MCP server or expose playlist, library, catalog, authentication or queue tools.
-No playlist operations are performed by the add-on or tests. Avoid playlist pages
-and operations when using the unrestricted Apple website manually.
+browser experiment. The MCP facade calls upstream browser functions for playback and uses the upstream
+platform-independent amp_api module for playlist and library management. The macOS
+AppleScript engine is not used. Integration tests never mutate a real Apple account.
+Playlist mutation tools act only when explicitly called. Playlist deletion additionally
+requires confirm=true. Reordering tracks is not exposed because amp_api does not
+implement it.
 
 ## Architecture and persistence
 
@@ -36,7 +37,7 @@ VNC, websockify and CDP bind only to loopback and have no published ports.
 MCP is removed from Ingress; its URL and credential do not depend on HA Ingress tokens.
 The noVNC desktop continues to use HA authentication and the existing relative paths.
 
-## Secure LAN MCP (0.1.2)
+## Secure LAN MCP (0.1.3)
 
 MCP is disabled by default. Configure the following in the add-on configuration UI:
 

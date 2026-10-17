@@ -53,7 +53,7 @@ async def main():
                     await session.send_ping()
                     assert session_id() is None
                     tools = await session.list_tools()
-                    assert {t.name for t in tools.tools} == {'play_song', 'control', 'now_playing', 'volume'}
+                    assert {t.name for t in tools.tools} == {'play_song', 'control', 'now_playing', 'volume', 'list_playlists', 'playlist_tracks', 'search_library', 'search_catalog', 'create_playlist', 'rename_playlist', 'add_playlist_tracks', 'remove_playlist_track', 'delete_playlist', 'list_playlist_folders', 'create_playlist_folder', 'move_playlist_to_folder'}
                     assert not (await session.call_tool('now_playing', {})).isError
                     assert (await session.call_tool('play_song', {'catalog_id': 'playlist-test'})).isError
         print('TLS auth, protocol negotiation, SDK initialize/ping/list/call: PASS (' + base + ')')

@@ -1,6 +1,6 @@
 """Restricted MCP facade over the pinned upstream browser engine.
 
-Do not import upstream server: its broad tools include playlist operations.
+Expose selected cross-platform web API tools; never import the macOS AppleScript server.
 """
 import atexit
 import signal
@@ -10,7 +10,7 @@ import uvicorn
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 from security import AuthenticatedMCP, load_settings
-from applemusic_mcp import browser
+from applemusic_mcp import browser, amp_api
 from applemusic_mcp.auth import save_user_token
 
 mcp = FastMCP("Apple Music Browser", host="0.0.0.0", port=8765,
@@ -48,6 +48,98 @@ def volume(level: int) -> tuple[bool, str]:
     if not 0 <= level <= 100:
         raise ValueError("Volume must be between 0 and 100")
     return browser.browser_settings(volume=level)
+
+
+# The upstream AMP web API reuses the signed-in browser's captured user token.
+# IDs (rather than names) are required for mutations to avoid ambiguity.
+@mcp.tool()
+def list_playlists() -> list[dict]:
+    """List Apple Music library playlists, including their IDs and editability."""
+    return amp_api.list_playlists()
+
+
+@mcp.tool()
+def playlist_tracks(playlist_id: str) -> list[dict]:
+    """List songs in a playlist, including track relationship IDs for removal."""
+    return amp_api.get_tracks(playlist_id)
+
+
+@mcp.tool()
+def search_library(term: str, limit: int = 25) -> list[dict]:
+    """Search songs in the signed-in user's library."""
+    if not term.strip() or not 1 <= limit <= 100:
+        raise ValueError("Nonempty term and limit 1..100 required")
+    return amp_api.search_library_songs(term, limit)
+
+
+@mcp.tool()
+def search_catalog(term: str, limit: int = 5) -> list[dict]:
+    """Search Apple Music catalog songs for IDs to add to playlists."""
+    if not term.strip() or not 1 <= limit <= 25:
+        raise ValueError("Nonempty term and limit 1..25 required")
+    return amp_api.search_catalog_songs(term, limit)
+
+
+@mcp.tool()
+def create_playlist(name: str, description: str = "") -> tuple[bool, str]:
+    """Create a new Apple Music playlist in the signed-in account."""
+    if not name.strip():
+        raise ValueError("Playlist name is required")
+    return amp_api.create_playlist(name, description)
+
+
+@mcp.tool()
+def rename_playlist(playlist_id: str, new_name: str) -> tuple[bool, str]:
+    """Rename a playlist by its ID."""
+    if not playlist_id.strip() or not new_name.strip():
+        raise ValueError("Playlist ID and new name are required")
+    return amp_api.rename_playlist(playlist_id, new_name)
+
+
+@mcp.tool()
+def add_playlist_tracks(playlist_id: str, catalog_ids: list[str]) -> tuple[bool, str]:
+    """Add catalog songs by their IDs to an existing playlist."""
+    if not playlist_id.strip() or not catalog_ids or len(catalog_ids) > 100 or any(not x.isdigit() for x in catalog_ids):
+        raise ValueError("Playlist ID and 1..100 numeric catalog IDs required")
+    return amp_api.add_tracks(playlist_id, catalog_ids)
+
+
+@mcp.tool()
+def remove_playlist_track(playlist_id: str, relationship_id: str) -> tuple[bool, str]:
+    """Remove a song from a playlist by its playlist-track relationship ID, not catalog ID."""
+    if not playlist_id.strip() or not relationship_id.strip():
+        raise ValueError("Playlist ID and relationship ID required")
+    return amp_api.remove_track(playlist_id, relationship_id)
+
+
+@mcp.tool()
+def delete_playlist(playlist_id: str, confirm: bool = False) -> tuple[bool, str]:
+    """Permanently delete a playlist by ID; requires explicit confirm=true."""
+    if not playlist_id.strip() or not confirm:
+        raise ValueError("Playlist ID and confirm=true required")
+    return amp_api.delete_playlist(playlist_id)
+
+
+@mcp.tool()
+def list_playlist_folders() -> list[dict]:
+    """List folders containing Apple Music playlists."""
+    return amp_api.list_folders()
+
+
+@mcp.tool()
+def create_playlist_folder(name: str, parent_id: str = "p.playlistsroot") -> tuple[bool, str]:
+    """Create a playlist folder."""
+    if not name.strip():
+        raise ValueError("Folder name required")
+    return amp_api.create_folder(name, parent_id)
+
+
+@mcp.tool()
+def move_playlist_to_folder(playlist_id: str, folder_id: str = "p.playlistsroot") -> tuple[bool, str]:
+    """Move a playlist into a folder by ID."""
+    if not playlist_id.strip() or not folder_id.strip():
+        raise ValueError("Playlist and folder IDs required")
+    return amp_api.move_playlist_to_folder(playlist_id, folder_id)
 
 
 def open_browser():
