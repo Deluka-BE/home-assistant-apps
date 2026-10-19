@@ -89,3 +89,28 @@ Die identiteit moet de map kunnen doorzoeken/lezen en de bestanden lezen,
 ook na logrotatie. Ontbrekende bestanden en geweigerde rechten geven vaste,
 padvrije foutcodes. De gateway leest uitsluitend en voert geen retries uit
 bij bestandswijzigingen; herstart paginering bij rotatie of een gewijzigde log.
+
+## Optionele LoopData (vanaf 0.2.31)
+
+Vanaf `0.2.31` bieden `loopdata_list_running_sessions` en
+`loopdata_get_running_session` op `/mcp` optionele leestoegang, standaard
+uitgeschakeld (`loopdata_enabled: false`). Activeer pas na installatie. De verwachte interne host is `core-mariadb:3306`;
+runtimeconnectiviteit is nog niet geverifieerd.
+
+Gebruik uitsluitend de SELECT-only reader `loopdata_reader` en vul gebruikersnaam
+en wachtwoord privé in via `loopdata_username` en `loopdata_password`.
+De vaste bron is `loopdata.running_workouts`, met bronfilter `apple_health`.
+Stel `loopdata_host` in; `loopdata_port` is standaard `3306` en
+`loopdata_timeout` standaard `10` seconden (1–30). Host, gebruikersnaam,
+wachtwoord en `loopdata_ca_file` zijn standaard leeg.
+
+`loopdata_tls_mode` is standaard `verify`; gebruik zo nodig `loopdata_ca_file`
+voor een vertrouwd CA-bestand dat binnen de add-on leesbaar is.
+Kies `off` uitsluitend expliciet voor een vertrouwde lokale HAOS-verbinding als
+de server geen TLS ondersteunt. Er is nooit een automatische TLS-downgrade.
+
+Opslag gebruikt UTC; datumfilters gebruiken `Europe/Brussels`.
+Resultaten bevatten samenvatting, kilometergegevens, hartslag en herstel met
+expliciete dekking en aantallen weggelaten gegevens; geen ruwe JSON, GPS of weer.
+Bronrevisie: `fbeadbc140ec75d5431d94b0298e3d0fcc7512f3`; volgens de
+bronvalidatie zijn 573 gatewaytests geslaagd. Rollbackversie: `0.2.30`.

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.31
+
+- Add optional, disabled-by-default LoopData running-session tools on `/mcp` with SELECT-only access to `loopdata.running_workouts` (`apple_health`).
+- Add eight optional settings, verified TLS by default, and documentation for coverage, private reader credentials and activation after installation. Runtime connectivity remains unverified.
+- Source: `fbeadbc140ec75d5431d94b0298e3d0fcc7512f3`; reported source validation: 573 gateway tests passed. Published image: `ghcr.io/deluka-be/hevy-personal-mcp:0.2.31`, multiarch manifest `sha256:cc2aa4ce224e04c858a0ee331bb6a654968fd703e62b0438c410ec6eb455a364` (workflow `39303382151`, all jobs successful, completed `2026-10-19T18:42:49Z`). Rollback: `0.2.30`, unchanged manifest `sha256:30f657d4fefb924ef2e42b6c716dfcd660f9ef2b36502ac757d571ad12aaab45`.
+
 ## 0.2.28
 
 - Fix Hevy routine synchronization when the API omits routine notes; preserve existing notes and synchronization safety checks.
