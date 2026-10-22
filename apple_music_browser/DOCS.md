@@ -455,3 +455,47 @@ trixie x86_64/Python 3.13 container using the pinned upstream revision and MCP
 1.30.0. An AST comparison confirmed that the server differs only by the four
 removed registration decorators. Native ARM64/browser and sibling-container TLS
 network smoke tests remain CI checks; they were not run in this development test.
+
+### Spotify Discover Weekly source reader (phase 1)
+
+`read_spotify_discover_weekly(playlist="37i9dQZEVXcT3aus8zyY7o")` is a read-only
+MCP tool on the existing authenticated MCP interface. Supply an explicit playlist
+ID or `https://open.spotify.com/playlist/ID` to override the known default. It has
+no Apple Music writes, sync, scheduling or new authentication configuration.
+
+The pinned upstream browser engine remains the sole browser/context owner. Each
+call opens one temporary page through the primary page's context and closes it
+in `finally`; the Apple Music page reference is never replaced or navigated.
+Semantic DOM extraction uses row/gridcell roles and track/artist/album links,
+scrolls virtualized rows and reads twice from the top. No generated classes,
+request headers, response dumps, cookies, storage or credentials are inspected.
+There is no established Spotify response schema in this integration; phase 1
+uses the semantic DOM fallback rather than capturing arbitrary Web Player API
+responses. A changed/unsupported Spotify layout fails closed.
+
+Success requires the requested playlist URL, the Discover Weekly heading,
+exactly 30 contiguous positions with valid Spotify IDs and nonempty title/artists,
+reaching the scroll end, no detected error/auth/loading state, and matching
+normalized ordered reads. Duplicate track IDs at distinct positions survive.
+Results contain source identity, UTC extraction time, tracks and a versioned
+SHA-256 fingerprint of canonical source identity plus ordered normalized tracks
+(timestamp excluded). Optional album/duration changes also affect the hash.
+Failures return `source_incomplete`, `source_auth_required`, `source_unstable`
+or `source_busy` without partial success. A generic login prompt does not prove
+that a public playlist requires login; explicit access-login screens do.
+
+One concurrent reader is allowed. Each pass has at most 24 scroll/read steps,
+with 350 ms waits outside the browser thread. Normalization and hashing also run
+outside that thread. Navigation waits only for commit (5-second timeout); other
+callbacks only evaluate metadata/scroll or open/close the tab. Upstream queue
+waiting still depends on other browser work. No second browser launch or new
+runtime dependency is added. A temporary Spotify tab may add a renderer process,
+RAM and page-script CPU while open; no fixed memory figure is guaranteed. The
+existing persistent profile is preserved.
+
+Offline tests cover malformed/incomplete/oversized sources, duplicate occurrences,
+auth/error/loading states, unstable reads and same-context tab cleanup. Remaining
+live checks: use the browser UI for any required one-time Spotify login, then
+invoke this read tool, verify all 30 positions against Spotify, confirm virtual
+scroll/layout compatibility and cleanup, and observe transient RAM/CPU/process
+counts. No live service writes are needed. This phase does not add a login flow.

@@ -16,6 +16,7 @@ from playlist_ops import search_playlist_tracks, copy_playlist, replace_playlist
 import discovery
 import web_ops
 import local_tools
+from spotify_source import read_spotify_discover_weekly
 from mcp.types import ToolAnnotations
 
 mcp = FastMCP("Apple Music Browser", host="0.0.0.0", port=8765,
@@ -166,6 +167,10 @@ for module in (web_ops, local_tools):
         mcp.tool(annotations=ToolAnnotations(readOnlyHint=not write, destructiveHint=destructive,
                                             idempotentHint=not write, openWorldHint=True))(
             local_tools.audited(getattr(module, tool_name), write=write))
+
+
+mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False,
+                                    idempotentHint=True, openWorldHint=True))(read_spotify_discover_weekly)
 
 
 def open_browser():
