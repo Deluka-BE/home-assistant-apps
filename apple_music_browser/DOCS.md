@@ -499,3 +499,32 @@ live checks: use the browser UI for any required one-time Spotify login, then
 invoke this read tool, verify all 30 positions against Spotify, confirm virtual
 scroll/layout compatibility and cleanup, and observe transient RAM/CPU/process
 counts. No live service writes are needed. This phase does not add a login flow.
+
+### Read-only Spotify ISRC enrichment
+
+`lookup_spotify_isrc(tracks)` accepts 1..30 Spotify track IDs or HTTPS
+`open.spotify.com/track/ID` URLs. Query parameters and fragments are stripped.
+Results retain input order and repeated positions; network lookups are deduplicated
+within the call, including linked MusicBrainz recording lookups.
+
+MusicBrainz is the only provider: exact canonical Spotify URL relationships lead
+to recording ISRCs, with no title/artist search fallback. Each result includes
+`spotify_id`, `canonical_url`, `isrcs`, `recordings` (MusicBrainz IDs, title, artist
+credit, duration and disambiguation where available), `status` and `reason`.
+Statuses are `resolved` (one distinct ISRC), `missing` (no URL, recording relation
+or ISRC), `ambiguous` (multiple distinct ISRCs, all retained), or `error` (invalid
+input or provider failure). Provider errors never become missing matches or partial
+resolved results. A resolved status describes MusicBrainz data, not a verified
+cross-service match. MusicBrainz coverage may be incomplete or incorrect.
+
+The module uses public unauthenticated GET requests with a meaningful User-Agent,
+a process-wide request limiter (at least 1.05 seconds between request starts),
+5-second connect / 15-second read timeouts, no redirects and no retries. It bounds
+relationship fan-out to 100 recordings per track; exceeding that returns an error.
+No Spotify Web API, browser scraping, credentials or paid providers are involved.
+
+Callers can pass track IDs from `read_spotify_discover_weekly()` to this tool, then
+pass validated ISRCs to the existing `resolve_isrc(isrcs, storefront)` tool to obtain
+Apple Music catalog candidates. Review title, artists, duration and version/release
+metadata before selecting any candidate. Neither enrichment nor resolution writes
+playlists, schedules synchronization or selects among conflicting ISRCs.

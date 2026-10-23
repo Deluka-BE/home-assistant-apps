@@ -24,19 +24,23 @@ class RegistrationTests(unittest.TestCase):
             spec.loader.exec_module(facade)
         async def check():
             tools = {tool.name: tool for tool in await facade.mcp.list_tools()}
-            self.assertEqual(len(tools), 41)
+            self.assertEqual(len(tools), 42)
             for name in ('play_song', 'control', 'now_playing', 'volume'):
                 self.assertNotIn(name, tools)
                 self.assertTrue(callable(getattr(facade, name)))
                 with self.assertRaises(Exception):
                     await facade.mcp.call_tool(name, {})
             self.assertTrue(tools['read_spotify_discover_weekly'].annotations.readOnlyHint)
+            self.assertTrue(tools['lookup_spotify_isrc'].annotations.readOnlyHint)
+            self.assertTrue(tools['lookup_spotify_isrc'].annotations.idempotentHint)
+            self.assertFalse(tools['lookup_spotify_isrc'].annotations.destructiveHint)
+            self.assertEqual(tools['lookup_spotify_isrc'].inputSchema['required'], ['tracks'])
             self.assertIn('browser_settings_info', tools)
             self.assertIn('set_browser_settings', tools)
             discovery = facade.discovery
             added = (*facade.web_ops.READ_TOOLS, *facade.web_ops.WRITE_TOOLS,
                      *facade.local_tools.READ_TOOLS, *facade.local_tools.WRITE_TOOLS)
-            self.assertEqual(len(tools), 16 + len(discovery.READ_TOOLS) + len(added))
+            self.assertEqual(len(tools), 17 + len(discovery.READ_TOOLS) + len(added))
             for module in (facade.web_ops, facade.local_tools):
                 for name in module.READ_TOOLS:
                     self.assertTrue(tools[name].annotations.readOnlyHint)
