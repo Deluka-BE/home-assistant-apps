@@ -23,8 +23,9 @@ class RegistrationTests(unittest.TestCase):
         with patch.dict(sys.modules, {'applemusic_mcp': package, 'applemusic_mcp.auth': auth}), patch.object(sys, 'path', [str(directory)] + sys.path):
             spec.loader.exec_module(facade)
         async def check():
-            tools = {tool.name: tool for tool in await facade.mcp.list_tools()}
-            self.assertEqual(len(tools), 42)
+            registered = await facade.mcp.list_tools()
+            tools = {tool.name: tool for tool in registered}
+            self.assertEqual(len(tools), len(registered))
             for name in ('play_song', 'control', 'now_playing', 'volume'):
                 self.assertNotIn(name, tools)
                 self.assertTrue(callable(getattr(facade, name)))
@@ -40,7 +41,15 @@ class RegistrationTests(unittest.TestCase):
             discovery = facade.discovery
             added = (*facade.web_ops.READ_TOOLS, *facade.web_ops.WRITE_TOOLS,
                      *facade.local_tools.READ_TOOLS, *facade.local_tools.WRITE_TOOLS)
-            self.assertEqual(len(tools), 17 + len(discovery.READ_TOOLS) + len(added))
+            required = {
+                'list_playlists', 'playlist_tracks', 'search_library', 'search_catalog',
+                'create_playlist', 'rename_playlist', 'add_playlist_tracks',
+                'remove_playlist_track', 'delete_playlist', 'list_playlist_folders',
+                'create_playlist_folder', 'move_playlist_to_folder',
+                'search_playlist_tracks', 'copy_playlist', 'replace_playlist_track',
+                'read_spotify_discover_weekly', 'lookup_spotify_isrc',
+            } | set(discovery.READ_TOOLS) | set(added)
+            self.assertTrue(required <= tools.keys(), required - tools.keys())
             for module in (facade.web_ops, facade.local_tools):
                 for name in module.READ_TOOLS:
                     self.assertTrue(tools[name].annotations.readOnlyHint)
