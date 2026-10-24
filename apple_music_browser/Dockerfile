@@ -13,5 +13,5 @@ RUN test "$TARGETARCH" = arm64 \
  && rm -rf /var/lib/apt/lists/* /opt/upstream/.git
 COPY server.py isrc_lookup.py spotify_source.py playlist_ops.py discovery.py web_ops.py local_tools.py security.py run.py nginx.conf /opt/addon/
 COPY release.json config.yaml Dockerfile /opt/addon/
-LABEL io.hass.name="Apple Music Browser" io.hass.description="Apple Music browser control using upstream applemusic-mcp" io.hass.arch="aarch64" io.hass.type="addon" io.hass.version="0.1.9"
+LABEL io.hass.name="Apple Music Browser" io.hass.description="Apple Music browser control using upstream applemusic-mcp" io.hass.arch="aarch64" io.hass.type="addon" io.hass.version="0.1.10"
 ENTRYPOINT ["/usr/bin/tini", "--", "/opt/venv/bin/python", "/opt/addon/run.py"]
