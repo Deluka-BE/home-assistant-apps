@@ -1,162 +1,320 @@
-"""Phase-one Spotify source reader. No credentials, API requests or music writes."""
+"""Fail-closed reader for Spotify's public embed hydration data (not an API)."""
 import hashlib
+import http.client
 import json
 import re
+import socket
 import threading
 import time
 from datetime import datetime, timezone
-from urllib.parse import urlsplit
+from html.parser import HTMLParser
 
 DEFAULT_PLAYLIST = '37i9dQZEVXcT3aus8zyY7o'
-_ID = re.compile(r'^[A-Za-z0-9]{22}$')
+_ID = re.compile(r'[A-Za-z0-9]{22}')
 _LOCK = threading.Lock()
+_FETCH_LOCK = threading.Lock()
+MAX_BODY = 2 * 1024 * 1024
+MAX_SCRIPTS = 64
+MAX_NODES = 20000
+MAX_DEPTH = 32
+PACE = 0.75
+WORK_TIMEOUT = 16
+
+
+class SourceError(Exception):
+    """Only fixed, public reason codes may cross the reader boundary."""
 
 
 def playlist_id(value):
+    if not isinstance(value, str) or len(value) > 2048 or any(c.isspace() or ord(c) < 32 or ord(c) == 127 for c in value):
+        raise ValueError('Invalid Spotify playlist input')
     if _ID.fullmatch(value):
         return value
-    url = urlsplit(value)
-    match = re.fullmatch(r'/playlist/([A-Za-z0-9]{22})/?', url.path)
-    if url.scheme == 'https' and url.netloc == 'open.spotify.com' and match and not url.fragment:
-        return match[1]
-    raise ValueError('Supply a Spotify playlist ID or https://open.spotify.com/playlist/ID')
+    match = re.fullmatch(r'https://open\.spotify\.com/playlist/([A-Za-z0-9]{22})(?:\?[^#]*)?', value)
+    if not match:
+        raise ValueError('Invalid Spotify playlist input')
+    return match[1]
 
 
-def validate(raw, target):
-    """Normalize only allowlisted metadata outside the browser owner thread."""
-    if raw.get('auth'):
-        return 'source_auth_required', None
-    if not raw.get('at_end') or raw.get('error') or raw.get('loading') or raw.get('identity') != target or raw.get('name') != 'Discover Weekly':
-        return 'source_incomplete', None
-    rows = raw.get('tracks', [])
-    if len(rows) != 30:
-        return 'source_incomplete', None
+def fetch_embed(target):
+    """Bound caller latency even if the platform DNS resolver stalls.
+
+    At most one daemon transport worker can remain outstanding. A timed-out
+    worker never starts a second request or contributes a later snapshot.
+    """
+    if not _FETCH_LOCK.acquire(blocking=False):
+        raise SourceError('transport_busy')
+    complete = threading.Event()
     result = []
+
+    def run():
+        try:
+            result.append(_fetch_embed(target))
+        except Exception as error:
+            result.append(error if isinstance(error, SourceError) else SourceError('reader_error'))
+        finally:
+            _FETCH_LOCK.release()
+            complete.set()
+
+    worker = threading.Thread(target=run, daemon=True)
+    try:
+        worker.start()
+    except Exception:
+        _FETCH_LOCK.release()
+        raise SourceError('reader_error') from None
+    if not complete.wait(WORK_TIMEOUT):
+        raise SourceError('timeout')
+    if isinstance(result[0], SourceError):
+        raise result[0]
+    return result[0]
+
+
+def _fetch_embed(target):
+    """One fresh TLS connection, no cookies, redirects, credentials or retries."""
+    deadline = time.monotonic() + 15
+    conn = http.client.HTTPSConnection('open.spotify.com', timeout=5)
+    transport = None
+    response = None
+
+    def interrupt():
+        # A socket timeout alone does not bound trickling HTTP headers. Interrupt
+        # the underlying socket at the overall deadline as well.
+        active = transport if transport is not None else conn.sock
+        if active is not None:
+            try:
+                active.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
+
+    timer = threading.Timer(15, interrupt)
+    timer.daemon = True
+    timer.start()
+    try:
+        conn.connect()
+        if time.monotonic() >= deadline:
+            raise SourceError('timeout')
+        conn.request('GET', '/embed/playlist/' + target, headers={
+            'User-Agent': 'home-assistant-apps/spotify-embed-reader',
+            'Accept': 'text/html', 'Accept-Encoding': 'identity',
+            'Cache-Control': 'no-cache, no-store', 'Pragma': 'no-cache'})
+        conn.sock.settimeout(min(5, max(0.001, deadline - time.monotonic())))
+        transport = conn.sock
+        response = conn.getresponse()
+        if 300 <= response.status < 400:
+            raise SourceError('redirect')
+        if response.status != 200:
+            raise SourceError('http_status')
+        if response.getheader('Content-Type', '').split(';')[0].strip().lower() != 'text/html':
+            raise SourceError('content_type')
+        if response.getheader('Content-Encoding', 'identity').lower().strip() != 'identity':
+            raise SourceError('content_encoding')
+        body = bytearray()
+        while True:
+            if response.length == 0:
+                break
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise SourceError('timeout')
+            # read1 performs at most one buffered/raw read; a trickling peer cannot
+            # keep a single read alive indefinitely beyond the total deadline.
+            transport.settimeout(min(5, remaining))
+            chunk = response.read1(min(65536, MAX_BODY + 1 - len(body)))
+            if not chunk:
+                if response.length is not None and response.length > 0:
+                    raise SourceError('truncated_body')
+                break
+            body.extend(chunk)
+            if len(body) > MAX_BODY:
+                raise SourceError('body_too_large')
+        if time.monotonic() > deadline:
+            raise SourceError('timeout')
+        return bytes(body).decode('utf-8', errors='strict')
+    except (TimeoutError, socket.timeout):
+        raise SourceError('timeout') from None
+    except (OSError, http.client.HTTPException, UnicodeError):
+        raise SourceError('network_or_encoding') from None
+    finally:
+        timer.cancel()
+        if response is not None:
+            response.close()
+        conn.close()
+
+
+class Scripts(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.scripts = []
+        self.current = None
+        self.count = 0
+        self.size = 0
+
+    def handle_starttag(self, tag, attrs):
+        if tag != 'script':
+            return
+        self.count += 1
+        if self.count > MAX_SCRIPTS:
+            raise SourceError('script_limit')
+        attrs = dict(attrs)
+        if attrs.get('type', '').lower() == 'application/json':
+            self.current = [attrs.get('id'), []]
+
+    def handle_data(self, data):
+        if self.current is not None:
+            self.size += len(data.encode('utf-8'))
+            if self.size > MAX_BODY:
+                raise SourceError('json_limit')
+            self.current[1].append(data)
+
+    def handle_endtag(self, tag):
+        if tag == 'script' and self.current is not None:
+            self.scripts.append((self.current[0], ''.join(self.current[1])))
+            self.current = None
+
+
+def nodes(payload):
+    stack = [(payload, 0)]
+    visited = 0
+    while stack:
+        item, depth = stack.pop()
+        visited += 1
+        if visited > MAX_NODES or depth > MAX_DEPTH:
+            raise SourceError('traversal_limit')
+        yield item
+        if isinstance(item, dict):
+            stack.extend((v, depth + 1) for v in item.values())
+        elif isinstance(item, list):
+            stack.extend((v, depth + 1) for v in item)
+
+
+def normalize(entity, target):
+    if not isinstance(entity, dict):
+        raise SourceError('playlist_shape')
+    identities = [entity[k] for k in ('id', 'uri') if k in entity]
+    if not identities or any(v not in (target, 'spotify:playlist:' + target) for v in identities):
+        raise SourceError('playlist_identity')
+    if entity.get('type', 'playlist') != 'playlist' or entity.get('name') != 'Discover Weekly':
+        raise SourceError('playlist_type_or_name')
+    # Only the observed embed trackList array is supported; never harvest URIs.
+    rows = entity.get('trackList')
+    if not isinstance(rows, list) or not 1 <= len(rows) <= 1000:
+        raise SourceError('track_count')
+    tracks, warnings = [], set()
+    if len(rows) != 30:
+        warnings.add('non_30_track_count')
     for position, row in enumerate(rows, 1):
-        artists = row.get('artists')
-        if (type(row.get('position')) is not int or row['position'] != position
-                or not isinstance(row.get('id'), str) or not _ID.fullmatch(row['id'])
-                or not isinstance(row.get('title'), str) or not row['title'].strip()
-                or not isinstance(artists, list) or not artists
-                or any(not isinstance(a, str) or not a.strip() for a in artists)):
-            return 'source_incomplete', None
-        item = dict(position=position, id=row['id'], title=row['title'].strip(),
-                    artists=[a.strip() for a in artists])
-        if isinstance(row.get('album'), str) and row['album'].strip():
-            item['album'] = row['album'].strip()
-        duration = row.get('duration')
-        if isinstance(duration, str) and re.fullmatch(r'\d{1,3}:[0-5]\d', duration):
-            minutes, seconds = map(int, duration.split(':'))
-            item['duration_ms'] = (minutes * 60 + seconds) * 1000
-        result.append(item)
-    return 'ok', result
+        if not isinstance(row, dict) or row.get('type', 'track') != 'track' or row.get('isLocal', False):
+            raise SourceError('unsupported_track')
+        uri = row.get('uri')
+        if not isinstance(uri, str) or not re.fullmatch(r'spotify:track:[A-Za-z0-9]{22}', uri):
+            raise SourceError('track_uri')
+        ident = uri.split(':')[2]
+        if 'id' in row and row['id'] != ident:
+            raise SourceError('track_id')
+        title = row.get('title')
+        if not isinstance(title, str) or not title.strip():
+            raise SourceError('track_title')
+        if 'artists' in row:
+            artists = row['artists']
+            if not isinstance(artists, list) or not artists:
+                raise SourceError('track_artists')
+            artists = [a.get('name') if isinstance(a, dict) else a for a in artists]
+            provenance = 'structured'
+        else:
+            artists = [row.get('subtitle')]
+            provenance = 'display_credit'
+        if any(not isinstance(a, str) or not a.strip() for a in artists):
+            raise SourceError('track_artists')
+        track = dict(position=position, id=ident, title=title.strip(),
+                     artists=[a.strip() for a in artists], artists_source=provenance)
+        if 'duration' in row:
+            duration = row['duration']
+            if type(duration) is not int or duration <= 0:
+                raise SourceError('track_duration')
+            track['duration_ms'] = duration
+        if 'isPlayable' in row:
+            if type(row['isPlayable']) is not bool:
+                raise SourceError('track_playability')
+            track['is_playable'] = row['isPlayable']
+            if not row['isPlayable']:
+                warnings.add('unplayable_track')
+        tracks.append(track)
+    return tracks, sorted(warnings)
 
 
-def finish(first, second, target):
-    status, tracks = validate(first, target)
-    if status != 'ok':
-        return {'status': status}
-    status, again = validate(second, target)
-    if status != 'ok':
-        return {'status': status}
-    if tracks != again:
-        return {'status': 'source_unstable'}
-    source = {'service': 'spotify', 'playlist_id': target,
-              'url': f'https://open.spotify.com/playlist/{target}', 'name': 'Discover Weekly'}
-    canonical = json.dumps({'source': source, 'tracks': tracks}, sort_keys=True,
-                           separators=(',', ':'), ensure_ascii=False).encode()
-    return dict(status='ok', source=source, tracks=tracks,
-                extracted_at=datetime.now(timezone.utc).isoformat(),
-                fingerprint=hashlib.sha256(canonical).hexdigest(), fingerprint_version=1)
-
-
-# Use semantic roles and link destinations, never generated CSS classes. Only
-# return track metadata/state; never serialize page HTML, storage or responses.
-_READ = r"""() => {
- const main = document.querySelector('main');
- const text = main?.innerText || '';
- const path = location.pathname.match(/^\/playlist\/([A-Za-z0-9]{22})\/?$/);
- const name = main?.querySelector('h1')?.textContent.trim() || '';
- const tracks = [...(main?.querySelectorAll('[role="row"]') || [])].flatMap(row => {
-   const link = row.querySelector('a[href*="/track/"]');
-   if (!link) return [];
-   const cells = [...row.querySelectorAll('[role="gridcell"]')];
-   const number = cells[0]?.textContent.trim();
-   const position = /^\d+$/.test(number || '') ? Number(number) : Number(row.getAttribute('aria-rowindex')) - 1;
-   const artists = [...row.querySelectorAll('a[href*="/artist/"]')].map(a => a.textContent.trim());
-   return [{position, id: (link.getAttribute('href').match(/\/track\/([A-Za-z0-9]{22})(?:[?/#]|$)/) || [])[1] || '',
-     title: link.textContent.trim(), artists,
-     album: row.querySelector('a[href*="/album/"]')?.textContent.trim() || '',
-     duration: cells.at(-1)?.textContent.trim() || ''}];
- });
- let scroller = main?.querySelector('[role="row"]')?.parentElement;
- while (scroller && !(scroller.scrollHeight > scroller.clientHeight + 10 && /auto|scroll/.test(getComputedStyle(scroller).overflowY))) scroller = scroller.parentElement;
- const at_end = !scroller || scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 2;
- return {identity: path?.[1] || '', name, tracks, at_end,
-   auth: location.hostname === 'accounts.spotify.com' || /log in to (view|see|access)|sign in to (view|see|access)/i.test(text),
-   error: /something went wrong|couldn.t find that playlist|page not found|playlist is unavailable/i.test(text),
-   loading: !!main?.querySelector('[aria-busy="true"], [role="progressbar"]')};
-}"""
-_SCROLL = r"""reset => {
- const row = document.querySelector('main [role="row"]');
- let node = row?.parentElement;
- while (node && !(node.scrollHeight > node.clientHeight + 10 && /auto|scroll/.test(getComputedStyle(node).overflowY))) node = node.parentElement;
- if (!node) return false;
- node.scrollTop = reset ? 0 : node.scrollTop + Math.max(100, node.clientHeight * 0.7);
- return true;
-}"""
+def parse_embed(html, target):
+    if len(html.encode('utf-8')) > MAX_BODY:
+        raise SourceError('body_too_large')
+    parser = Scripts()
+    parser.feed(html)
+    parser.close()
+    payloads, known = [], []
+    total_nodes = 0
+    try:
+        for script_id, text in parser.scripts:
+            payload = json.loads(text)
+            # Validate limits even on the known path before normalization.
+            total_nodes += sum(1 for _ in nodes(payload))
+            if total_nodes > MAX_NODES:
+                raise SourceError('traversal_limit')
+            payloads.append(payload)
+            if script_id == '__NEXT_DATA__':
+                entity = payload
+                for key in ('props', 'pageProps', 'state', 'data', 'entity'):
+                    if not isinstance(entity, dict) or key not in entity:
+                        break
+                    entity = entity[key]
+                else:
+                    known.append(entity)
+    except (ValueError, RecursionError):
+        raise SourceError('invalid_json') from None
+    candidates = []
+    for payload in payloads:
+        for item in nodes(payload):
+            if isinstance(item, dict) and (item.get('id') == target or item.get('uri') == 'spotify:playlist:' + target) and 'trackList' in item:
+                candidates.append(item)
+    # Known entities must validate, even when another candidate looks convenient.
+    normalized = [normalize(e, target) for e in known]
+    normalized.extend(normalize(e, target) for e in candidates)
+    if not normalized:
+        raise SourceError('playlist_missing')
+    if any(n != normalized[0] for n in normalized[1:]):
+        raise SourceError('conflicting_candidates')
+    tracks, warnings = normalized[0]
+    return dict(tracks=tracks, warnings=warnings, parser='next_data' if known else 'semantic_json')
 
 
 def read_spotify_discover_weekly(playlist: str = DEFAULT_PLAYLIST) -> dict:
-    """Read and validate 30 Discover Weekly positions twice. No Apple Music writes.
-
-    playlist is an explicit Spotify playlist ID/URL; the known ID is the default.
-    Login, incomplete and unstable sources fail closed. Temporary tab always closes.
-    """
-    from applemusic_mcp import browser
+    """Read public embed trackList twice; fail closed without Apple Music writes."""
     target = playlist_id(playlist)
+    diagnostics = dict(source='spotify_embed', playlist_found=False)
     if not _LOCK.acquire(blocking=False):
-        return {'status': 'source_busy'}
-    tab = []  # Playwright objects are accessed only inside engine callbacks.
-    def open_tab(primary):
-        page = primary.context.new_page()
-        tab.append(page)
-        page.goto(f'https://open.spotify.com/playlist/{target}', wait_until='commit', timeout=5000)
-    def collect():
-        browser._engine.submit(lambda _: tab[0].evaluate(_SCROLL, True))
-        rows = {}
-        state = {}
-        for _ in range(24):
-            time.sleep(0.35)  # Never sleep on the Playwright owner thread.
-            state = browser._engine.submit(lambda _: tab[0].evaluate(_READ))
-            for row in state['tracks']:
-                position = row['position']
-                if position in rows and rows[position] != row:
-                    return dict(state, error=True)
-                rows[position] = row
-            if state['auth'] or state['error'] or len(rows) > 30:
-                break
-            if len(rows) >= 30 and state['at_end'] and not state['loading']:
-                break
-            browser._engine.submit(lambda _: tab[0].evaluate(_SCROLL, False))
-        return dict(state, tracks=[rows[k] for k in sorted(rows)])
+        return dict(status='source_busy', diagnostics=diagnostics)
     try:
-        browser._engine.submit(open_tab)
-        first = collect()
-        status, _ = validate(first, target)
-        if status != 'ok':
-            result = {'status': status}
-        else:
-            result = finish(first, collect(), target)
-    except Exception:
-        # Browser exceptions can contain URLs or page content: never expose them.
-        result = {'status': 'source_incomplete'}
-    finally:
+        first = parse_embed(fetch_embed(target), target)
+        diagnostics.update(parser=first['parser'], playlist_found=True, track_count=len(first['tracks']))
+        time.sleep(PACE)
         try:
-            if tab:
-                browser._engine.submit(lambda _: tab[0].close())
-        except Exception:
-            result = {'status': 'source_incomplete'}
-        finally:
-            _LOCK.release()
-    return result
+            second = parse_embed(fetch_embed(target), target)
+        except SourceError as error:
+            if str(error) == 'playlist_identity':
+                return dict(status='source_unstable', diagnostics=dict(diagnostics, reason='snapshot_identity_mismatch'))
+            raise
+        if first['tracks'] != second['tracks']:
+            return dict(status='source_unstable', diagnostics=dict(diagnostics, reason='snapshot_mismatch'))
+        source = dict(service='spotify', playlist_id=target,
+                      url='https://open.spotify.com/playlist/' + target, name='Discover Weekly')
+        canonical = json.dumps(dict(source=source, tracks=first['tracks']), sort_keys=True,
+                               separators=(',', ':'), ensure_ascii=False).encode()
+        return dict(status='ok', source=source, tracks=first['tracks'],
+                    extracted_at=datetime.now(timezone.utc).isoformat(),
+                    fingerprint=hashlib.sha256(canonical).hexdigest(), fingerprint_version=2,
+                    completeness_basis='embedded_tracklist',
+                    diagnostics=dict(diagnostics, warnings=first['warnings']))
+    except SourceError as error:
+        return dict(status='source_incomplete', diagnostics=dict(diagnostics, reason=str(error)))
+    except Exception:
+        return dict(status='source_incomplete', diagnostics=dict(diagnostics, reason='reader_error'))
+    finally:
+        # Pace even failed requests and sequential callers; lock covers the wait.
+        time.sleep(PACE)
+        _LOCK.release()

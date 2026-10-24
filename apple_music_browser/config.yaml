@@ -1,5 +1,5 @@
 name: Apple Music Browser
-version: "0.1.9"
+version: "0.1.10"
 slug: apple_music_browser
 description: Persistent Apple Music browser with MCP playlist and library management
 arch:

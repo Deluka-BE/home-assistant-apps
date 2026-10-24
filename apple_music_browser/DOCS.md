@@ -463,42 +463,50 @@ MCP tool on the existing authenticated MCP interface. Supply an explicit playlis
 ID or `https://open.spotify.com/playlist/ID` to override the known default. It has
 no Apple Music writes, sync, scheduling or new authentication configuration.
 
-The pinned upstream browser engine remains the sole browser/context owner. Each
-call opens one temporary page through the primary page's context and closes it
-in `finally`; the Apple Music page reference is never replaced or navigated.
-Semantic DOM extraction uses row/gridcell roles and track/artist/album links,
-scrolls virtualized rows and reads twice from the top. No generated classes,
-request headers, response dumps, cookies, storage or credentials are inspected.
-There is no established Spotify response schema in this integration; phase 1
-uses the semantic DOM fallback rather than capturing arbitrary Web Player API
-responses. A changed/unsupported Spotify layout fails closed.
+The source reader uses Spotify's public embed HTML hydration data, specifically
+an ordered `trackList` in a matching playlist entity. This is not a documented
+Spotify playlist-data API contract. A changed or unsupported schema fails closed;
+there is no browser-scrolling fallback. Only a bare 22-character ID or an exact
+HTTPS `open.spotify.com/playlist/ID` URL is accepted. Query parameters are ignored;
+credentials, ports, fragments, encoded paths and whitespace are rejected. The
+reader constructs the embed URL internally and never fetches the supplied URL.
 
-Success requires the requested playlist URL, the Discover Weekly heading,
-exactly 30 contiguous positions with valid Spotify IDs and nonempty title/artists,
-reaching the scroll end, no detected error/auth/loading state, and matching
-normalized ordered reads. Duplicate track IDs at distinct positions survive.
-Results contain source identity, UTC extraction time, tracks and a versioned
-SHA-256 fingerprint of canonical source identity plus ordered normalized tracks
-(timestamp excluded). Optional album/duration changes also affect the hash.
-Failures return `source_incomplete`, `source_auth_required`, `source_unstable`
-or `source_busy` without partial success. A generic login prompt does not prove
-that a public playlist requires login; explicit access-login screens do.
+Each call makes two independent uncached, cookie-free TLS reads, separated by
+750 ms. Redirects, non-HTML content and unexpected compression are rejected.
+Requests use a project User-Agent, identity encoding, 5-second socket timeouts,
+a 15-second socket deadline and a streamed 2 MiB body cap. A guarded daemon
+worker bounds caller waiting to 16 seconds even if system DNS stalls; at most
+one transport worker can remain outstanding, blocking further fetches until it
+finishes. A late result is discarded. JSON script count,
+bytes, traversal depth and visited nodes are bounded. One reader runs at a time;
+failed requests are paced too. No browser/profile access or new dependency is used.
 
-One concurrent reader is allowed. Each pass has at most 24 scroll/read steps,
-with 350 ms waits outside the browser thread. Normalization and hashing also run
-outside that thread. Navigation waits only for commit (5-second timeout); other
-callbacks only evaluate metadata/scroll or open/close the tab. Upstream queue
-waiting still depends on other browser work. No second browser launch or new
-runtime dependency is added. A temporary Spotify tab may add a renderer process,
-RAM and page-script CPU while open; no fixed memory figure is guaranteed. The
-existing persistent profile is preserved.
+The known `__NEXT_DATA__` entity path is preferred. If absent, only JSON script
+payloads are searched for a matching playlist owning the recognized `trackList`
+array. Contradictory known entities or conflicting matching candidates fail closed.
+The playlist must retain the Discover Weekly name. Non-30 counts (1..1000) are
+accepted with warning metadata; empty or unreasonable collections fail. Source
+order and duplicate occurrences are preserved, with positions assigned 1..N.
+Track URIs, IDs, titles, artist credits and any duration are validated. Unplayable
+tracks remain in the result with a warning. Structured artists are preferred;
+a subtitle is preserved as one credit in `artists`, with
+`artists_source="display_credit"` indicating that it is not artist segmentation.
+Optional `duration_ms` remains compatible with downstream resolution.
 
-Offline tests cover malformed/incomplete/oversized sources, duplicate occurrences,
-auth/error/loading states, unstable reads and same-context tab cleanup. Remaining
-live checks: use the browser UI for any required one-time Spotify login, then
-invoke this read tool, verify all 30 positions against Spotify, confirm virtual
-scroll/layout compatibility and cleanup, and observe transient RAM/CPU/process
-counts. No live service writes are needed. This phase does not add a login flow.
+Success requires matching normalized ordered snapshots and returns
+`completeness_basis="embedded_tracklist"`: this does not claim an independently
+verified total. The version-2 SHA-256 fingerprint covers canonical source identity
+and ordered normalized tracks, excluding timestamps and diagnostics. Failures
+return `source_incomplete`, `source_unstable` or `source_busy` without tracks or
+fingerprint. Diagnostics contain only reason codes and structural metadata.
+No authentication inference is made from HTTP failures.
+
+Pass returned track IDs to `lookup_spotify_isrc` in batches of at most 30, then
+use the enriched records with `resolve_isrc`; larger source collections do not
+change the enrichment tool's batch limit. Offline fixture tests cover parsing,
+validation, snapshot stability, transport limits and safe failures. Live embed
+schema compatibility should be checked before release; this implementation does
+not authorize or perform a release.
 
 ### Read-only Spotify ISRC enrichment
 
