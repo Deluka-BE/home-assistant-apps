@@ -31,6 +31,10 @@ class RegistrationTests(unittest.TestCase):
                 self.assertTrue(callable(getattr(facade, name)))
                 with self.assertRaises(Exception):
                     await facade.mcp.call_tool(name, {})
+            for name in ('enrich_deezer_isrc', 'check_discover_weekly'):
+                self.assertTrue(tools[name].annotations.readOnlyHint)
+                self.assertFalse(tools[name].annotations.destructiveHint)
+                self.assertEqual(tools[name].inputSchema['required'], ['tracks'])
             self.assertTrue(tools['read_spotify_discover_weekly'].annotations.readOnlyHint)
             self.assertTrue(tools['lookup_spotify_isrc'].annotations.readOnlyHint)
             self.assertTrue(tools['lookup_spotify_isrc'].annotations.idempotentHint)

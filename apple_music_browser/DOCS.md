@@ -501,8 +501,8 @@ return `source_incomplete`, `source_unstable` or `source_busy` without tracks or
 fingerprint. Diagnostics contain only reason codes and structural metadata.
 No authentication inference is made from HTTP failures.
 
-Pass returned track IDs to `lookup_spotify_isrc` in batches of at most 30, then
-use the enriched records with `resolve_isrc`; larger source collections do not
+Pass returned metadata records to `check_discover_weekly` in batches of at most 30;
+larger source collections do not
 change the enrichment tool's batch limit. Offline fixture tests cover parsing,
 validation, snapshot stability, transport limits and safe failures. Live embed
 schema compatibility should be checked before release; this implementation does
@@ -536,3 +536,47 @@ pass validated ISRCs to the existing `resolve_isrc(isrcs, storefront)` tool to o
 Apple Music catalog candidates. Review title, artists, duration and version/release
 metadata before selecting any candidate. Neither enrichment nor resolution writes
 playlists, schedules synchronization or selects among conflicting ISRCs.
+
+### Read-only Discover Weekly matching
+
+`check_discover_weekly(tracks, storefront="be")` accepts 1..30 source-reader
+track records with title, artists and duration_ms. It enriches via
+`enrich_deezer_isrc(tracks)`, then checks Apple ISRC candidates before strict
+Apple catalog search for missing or metadata-incompatible matches. Conflicting
+multi-ID ISRC results remain ambiguous without a metadata-search override.
+MusicBrainz lookup remains available independently and is no longer a gate.
+
+Deezer uses public HTTPS `/search` and `/track/{id}`, no credentials, no redirects, a
+5-second connect / 10-second read timeout, and at most 300 candidates per query.
+Search uses up to three pages of 100 with explicit original-query/index params;
+upstream next URLs are never followed. Completion must cover the highest reported
+total with no continuation; overlapping or malformed pages fail closed.
+Queries use full title plus all artists, then primary artist, then title alone;
+queries broaden only after empty results, never after metadata rejection.
+Requests are serialized at least 250 ms apart; 429, 5xx and network failures
+activate a 30-second cooldown with no automatic retries. Diagnostics expose
+fixed statuses/reasons, not upstream bodies or links.
+
+Acceptance requires identical normalized title words (including every version
+qualifier), equal artist-credit sets, and duration within 2000 ms. Normalization
+ignores case and punctuation; credit separators are conservative. Only candidates passing title/version and duration checks fetch track details (at most
+300 unique IDs per search). Full contributor credits are deduplicated without role
+matching; malformed details or conflicting IDs, titles, durations or ISRCs fail closed.
+Apple combined artist credits use the same conservative separator parsing. Different
+ISRCs remain ambiguous. Multiple Apple IDs collapse only when every candidate has
+one identical validated ISRC, equal normalized title/version and full artist-credit
+sets, and durations within 2000 ms of both the source and each other. ISRC lookup
+also requires that code to equal the requested ISRC. Missing codes or any conflicting
+candidate prevent collapse. The lowest numeric catalog ID wins (lexical ID breaks
+numeric ties), independent of API order. Such rows report
+`reason="equivalent_catalog_releases"` and sorted `equivalent_catalog_ids`.
+Unique matches retain their existing behavior, including metadata fallback for
+Apple ISRC misses. Truncated results are not selected.
+This deliberately leaves spelling variations, incomplete credits and unavailable
+track-detail ISRC fields unresolved rather than inferring a match.
+
+The report preserves every input position and duplicate, includes enrichment
+status and matching method, and exposes `desired_catalog_ids` only if all rows
+resolve. No playlists are read or mutated, and no sync operation is introduced.
+Apple service failures are explicit errors, not catalog misses. Existing write
+tools remain separate. Fixture tests do not establish live 30/30 coverage.

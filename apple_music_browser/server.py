@@ -18,6 +18,7 @@ import web_ops
 import local_tools
 from spotify_source import read_spotify_discover_weekly
 from isrc_lookup import lookup_spotify_isrc
+from weekly_matching import enrich_deezer_isrc, check_discover_weekly
 from mcp.types import ToolAnnotations
 
 mcp = FastMCP("Apple Music Browser", host="0.0.0.0", port=8765,
@@ -176,6 +177,11 @@ mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False,
 
 mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False,
                                     idempotentHint=True, openWorldHint=True))(lookup_spotify_isrc)
+
+
+for tool in (enrich_deezer_isrc, check_discover_weekly):
+    mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False,
+                                        idempotentHint=True, openWorldHint=True))(tool)
 
 
 def open_browser():
