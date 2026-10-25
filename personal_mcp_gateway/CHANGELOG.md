@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.34
+
+- Return `ha_get_camera_snapshot` as native MCP image content instead of embedding JPEG base64 inside JSON text, with concise companion metadata.
+- Preserve the existing read-only camera transport, validation, resizing, metadata stripping and size limits.
+- Source: `1346a33b0635b107acadaf82169816c10a760f92`; published image: `ghcr.io/deluka-be/hevy-personal-mcp:0.2.34`, multiarch manifest `sha256:bed2f82939405e32635e8112203c4b4f31026e58e190fb92c18f87518d8e3141` (workflow `40192640495`, all jobs successful). Rollback: `0.2.33`, unchanged manifest `sha256:1f8dccbe3cd7010b33f7befa4e9fc1d735c35071a64a1bf4e1bb0366db900121`.
+
 ## 0.2.33
 
 - Add read-only `ha_get_camera_snapshot` for bounded Home Assistant camera stills, including JPEG/PNG input, metadata stripping, 768 px maximum output dimension and secret-safe failure handling.
