@@ -40,7 +40,7 @@ def make_engine(snapshot, **options):
     runner.side_effect = lambda *args: dict(probabilities={'partly cloudy': .8, 'clear': .2},
                                           inference_seconds=.2, rss_before_bytes=10,
                                           rss_after_bytes=20, load_and_inference_seconds=.4)
-    return Analysis(options, ha, runner)
+    return Analysis({'save_history': False} | options, ha, runner)
 
 
 def test_same_snapshot_no_writes_and_result_shape(snapshot):
@@ -222,3 +222,175 @@ def test_config_and_build_contract():
     assert 'huggingface.co' not in dockerfile
     for filename in ['requirements.txt', 'app.py', 'models.py', 'worker.py', 'run.sh']:
         assert (root / filename).is_file()
+
+
+def test_history_save_jsonl_and_shared_bytes(snapshot, tmp_path):
+    import json
+    engine = make_engine(snapshot, save_history=True)
+    engine.history_dir = tmp_path
+    state = execute(engine)
+    record = json.loads((tmp_path / 'analysis.jsonl').read_text())
+    stored = tmp_path / 'images' / record['image_filename']
+    assert stored.suffix == '.png'
+    assert stored.read_bytes() == snapshot
+    assert all(c.args[1] is snapshot for c in engine.runner.call_args_list)
+    assert record['timestamp'] == state['last_analysis']
+    assert record['camera_entity'] == state['camera_entity']
+    assert record['results'] == state['results']
+    assert record['summary'] == state['summary']
+    assert state['history_status'] == 'saved' and state['history_error'] is None
+    execute(engine, bypass=True)
+    assert len((tmp_path / 'analysis.jsonl').read_text().splitlines()) == 2
+    assert len(list((tmp_path / 'images').iterdir())) == 2
+
+
+def test_history_retention_preserves_audit(snapshot, tmp_path):
+    import json
+    engine = make_engine(snapshot, save_history=True, history_max_images=24)
+    engine.history_dir = tmp_path
+    for _ in range(26):
+        assert execute(engine)['history_status'] == 'saved'
+    records = [json.loads(line) for line in (tmp_path / 'analysis.jsonl').read_text().splitlines()]
+    images = {p.name for p in (tmp_path / 'images').iterdir()}
+    assert len(records) == 26 and len(images) == 24
+    assert records[0]['image_filename'] not in images
+    assert records[-1]['image_filename'] in images
+
+
+def test_disabled_history(snapshot, tmp_path):
+    engine = make_engine(snapshot)
+    engine.history_dir = tmp_path / 'unused'
+    assert execute(engine)['history_status'] == 'disabled'
+    assert not engine.history_dir.exists()
+
+
+@pytest.mark.parametrize('failure', ['mkdir', 'write', 'audit', 'prune'])
+def test_history_failure_isolation(snapshot, tmp_path, failure):
+    engine = make_engine(snapshot, save_history=True)
+    engine.history_dir = tmp_path
+    if failure == 'audit':
+        (tmp_path / 'analysis.jsonl').mkdir()
+    method = {'mkdir': 'mkdir', 'write': 'open', 'prune': 'iterdir'}.get(failure)
+    if method:
+        with patch.object(Path, method, side_effect=OSError('secret details')):
+            state = execute(engine)
+    else:
+        state = execute(engine)
+    assert state['summary']['match'] is True and state['error'] is None
+    assert state['history_status'] == 'error'
+    assert state['history_error'] and 'secret' not in str(state)
+    assert engine.runner.call_count == 2
+
+
+def test_history_skipped_invalid_and_candidate_error(snapshot, tmp_path):
+    import json
+    engine = make_engine(snapshot, save_history=True)
+    engine.history_dir = tmp_path
+    engine.ha.daylight.return_value = False
+    execute(engine)
+    assert not list(tmp_path.iterdir())
+    engine.ha.snapshot.return_value = b'invalid'
+    execute(engine, bypass=True)
+    assert not list(tmp_path.iterdir())
+    engine.ha.snapshot.return_value = snapshot
+    engine.runner.side_effect = [RuntimeError('secret'), dict(probabilities={'clear': 1})]
+    state = execute(engine, bypass=True)
+    record = json.loads((tmp_path / 'analysis.jsonl').read_text())
+    assert record['results']['mobilenet']['error'] == state['results']['mobilenet']['error']
+    assert 'secret' not in str(record)
+
+
+@pytest.mark.parametrize('options', [dict(save_history=1), dict(history_max_images=23),
+                                    dict(history_max_images=5001), dict(history_max_images=True)])
+def test_history_options_validation(options):
+    with pytest.raises(ValueError):
+        Analysis(options, Mock())
+
+
+def test_sensor_results_publish_before_next_candidate(snapshot):
+    from models import CANDIDATES
+    engine = make_engine(snapshot)
+    original = engine.runner.side_effect
+
+    def run(name, data):
+        if name == 'prithiv':
+            assert engine.ha.publish_sensor.call_count == 1
+        return original(name, data) | {'peak_rss_bytes': 1234}
+
+    engine.runner.side_effect = run
+    state = execute(engine)
+    assert engine.ha.publish_sensor.call_count == 2
+    for call, name in zip(engine.ha.publish_sensor.call_args_list, CANDIDATES):
+        candidate, normalized, attrs = call.args
+        assert candidate == name and normalized == 'partly_cloudy'
+        assert attrs['native_label'] == 'partly cloudy'
+        assert attrs['mapped_state'] == 'partly_cloudy'
+        assert attrs['confidence'] == .8
+        assert attrs['inference_seconds'] == .2
+        assert attrs['load_and_inference_seconds'] == .4
+        assert attrs['peak_rss_bytes'] == 1234
+        assert attrs['last_analysis'] and attrs['camera_entity'] == state['camera_entity']
+        assert (attrs['repository'], attrs['revision']) == CANDIDATES[name]
+        assert state['sensor_publications'][name]['error'] is None
+
+
+def test_sensor_unknown_threshold_and_candidate_failure(snapshot):
+    engine = make_engine(snapshot, minimum_confidence=.9)
+    execute(engine)
+    assert all(c.args[1] == 'unknown' for c in engine.ha.publish_sensor.call_args_list)
+    engine.ha.publish_sensor.reset_mock()
+    engine.runner.side_effect = [RuntimeError('secret payload'), dict(probabilities={'clear': 1})]
+    execute(engine)
+    failed, succeeded = engine.ha.publish_sensor.call_args_list
+    assert failed.args[1] == 'unknown'
+    assert failed.args[2]['error'] and 'secret' not in str(failed)
+    assert failed.args[2]['confidence'] is None
+    assert failed.args[2]['peak_rss_bytes'] is None
+    assert succeeded.args[1] == 'sunny'
+    assert 'error' not in succeeded.args[2]
+
+
+def test_sensor_failure_preserves_results_and_history(snapshot, tmp_path):
+    engine = make_engine(snapshot, save_history=True)
+    engine.history_dir = tmp_path
+    engine.ha.publish_sensor.side_effect = [RuntimeError('secret'), None]
+    state = execute(engine)
+    assert state['summary']['match'] and state['history_status'] == 'saved'
+    assert engine.runner.call_count == engine.ha.publish_sensor.call_count == 2
+    assert state['sensor_publications']['mobilenet']['error']
+    assert state['sensor_publications']['prithiv']['error'] is None
+    assert 'secret' not in str(state)
+
+
+@pytest.mark.parametrize('status', [200, 201, 302, 401, 500])
+def test_sensor_rest_transport(monkeypatch, status):
+    monkeypatch.setenv('SUPERVISOR_TOKEN', 'test-token')
+    session = Mock()
+    session.__enter__ = Mock(return_value=session)
+    session.__exit__ = Mock(return_value=False)
+    response = Mock(status_code=status)
+    response.__enter__ = Mock(return_value=response)
+    response.__exit__ = Mock(return_value=False)
+    session.post.return_value = response
+    with patch('app.requests.Session', return_value=session):
+        ha = HA()
+        if status in (200, 201):
+            ha.publish_sensor('prithiv', 'rain', {'confidence': .9})
+        else:
+            with pytest.raises(RuntimeError, match='sensor update failed'):
+                ha.publish_sensor('prithiv', 'rain', {'confidence': .9})
+    args, kwargs = session.post.call_args
+    assert args == ('http://supervisor/core/api/states/sensor.weather_camera_prithiv',)
+    assert kwargs['json'] == {'state': 'rain', 'attributes': {'confidence': .9}}
+    assert kwargs['headers'] == {'Authorization': 'Bearer test-token'}
+    assert kwargs['allow_redirects'] is False and kwargs['stream'] is True
+    assert kwargs['timeout'] == (5, 20) and session.trust_env is False
+
+
+def test_no_sensor_updates_without_candidate_attempt(snapshot):
+    engine = make_engine(snapshot)
+    engine.ha.daylight.return_value = False
+    execute(engine)
+    engine.ha.snapshot.return_value = b'invalid'
+    execute(engine, bypass=True)
+    engine.ha.publish_sensor.assert_not_called()

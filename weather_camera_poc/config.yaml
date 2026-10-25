@@ -1,5 +1,5 @@
 name: Weather Camera PoC
-version: "0.1.0"
+version: "0.1.1"
 slug: weather_camera_poc
 description: Compare two CPU weather classifiers on one in-memory camera still
 arch:
@@ -18,8 +18,12 @@ options:
   daylight_only: true
   interval_minutes: 60
   minimum_confidence: 0.65
+  save_history: true
+  history_max_images: 336
 schema:
   camera_entity: match(^camera\.[a-z0-9_]+$)
   daylight_only: bool
   interval_minutes: int(1,1440)
   minimum_confidence: float(0,1)
+  save_history: bool
+  history_max_images: int(24,5000)

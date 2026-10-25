@@ -24,7 +24,33 @@ server and deployment-specific load testing.
 The fixed API origin is `http://supervisor/core/api/`. No user token, browser,
 cookies, camera access token, external camera URL or MQTT credentials are used.
 No secrets or exception payloads are logged. Child model workers do not inherit
-the Supervisor token. MQTT discovery/sensors are deliberately deferred for v0.1.
+the Supervisor token. No MQTT broker or additional credentials are needed.
+
+## Home Assistant comparison sensors (0.1.1)
+
+Each candidate publishes through Core `POST /api/states/<entity_id>` using the
+existing Supervisor token, with fixed IDs `sensor.weather_camera_mobilenet` and
+`sensor.weather_camera_prithiv`. Both HTTP 200 (update) and 201 (create) are accepted.
+See the [Core REST API](https://contributors.home-assistant.io/core/internals/rest-api/).
+Add these entities and the configured camera to a dashboard to compare predictions
+with the live feed. Predictions describe the captured still, not subsequent frames.
+
+State is `sunny`, `partly_cloudy`, `cloudy`, `rain`, `fog`, `snow`, or `unknown`.
+Attributes include `native_label`, `mapped_state` (before confidence gating),
+`confidence`, `inference_seconds`, `load_and_inference_seconds`, `peak_rss_bytes`,
+UTC `last_analysis` (candidate completion time), `camera_entity`, `repository`,
+and pinned `revision`. Failed candidates publish `unknown` with a sanitized
+`error` and null unavailable metrics, replacing attributes from earlier successes.
+The first candidate publishes before the second starts; both use the same snapshot.
+
+These are REST-created states, without entity/device registry entries or unique
+IDs. They appear after the first candidate attempt and are recreated on the next
+analysis after a Core restart. Reserve the two IDs for this add-on. Stopping the
+add-on leaves the last states in Core; check `last_analysis` for freshness.
+Daylight skips and snapshot failures leave prior sensor states untouched.
+Publishing failures appear per model in Ingress/API `sensor_publications` with
+a safe error; they do not interrupt the other model or history retention. Updates
+are attempted again on the next analysis, with no separate retry queue.
 
 ## Options and scheduling
 
@@ -34,6 +60,8 @@ the Supervisor token. MQTT discovery/sensors are deliberately deferred for v0.1.
 | `daylight_only` | `true` | Require `sun.sun` state exactly `above_horizon` |
 | `interval_minutes` | `60` | Integer 1–1440; checks start immediately, then at this interval |
 | `minimum_confidence` | `0.65` | Inclusive threshold; below it the normalized result becomes `unknown` |
+| `save_history` | `true` | Save one validated snapshot and one JSONL record per completed analysis |
+| `history_max_images` | `336` | Integer 24–5000; prune oldest saved images |
 
 Missing/unknown sun state or failed state request fails closed without fetching
 an image. **Analyze Now** runs immediately regardless of the scheduled interval.
@@ -46,6 +74,42 @@ catch-up bursts. Status includes attempt and completed analysis timestamps in UT
 Skipped daylight attempts preserve the prior completed results; consult `skipped`
 and `last_attempt`. Results and status reset on restart.
 
+## Persistent review history (0.1.1)
+
+By default, completed scheduled and manual analyses save the validated original
+snapshot in `/data/history/images/` with a UTC timestamp including microseconds
+and a detected-format extension (for example `20261025T143300123456Z.jpg`). Both
+workers receive exactly the same bytes that are stored; images are not re-encoded.
+Skipped daylight checks and invalid/unavailable snapshots create no history.
+Completed A/B attempts include records even when individual models fail.
+
+`/data/history/analysis.jsonl` appends one compact JSON object per completed
+attempt: UTC `timestamp`, `image_filename`, `camera_entity`, full per-model
+`results` (native/normalized labels, confidence, all probabilities, timing, RSS,
+and sanitized errors where available), and `summary`. Failed models have an error
+instead of unavailable metrics. No camera URLs, tokens, cookies or raw image
+bytes are included in JSON/API logs.
+
+`history_max_images` defaults to 336: about 14 days at 24 hourly captures/day,
+usually longer with daylight-only collection; manual runs also count. Oldest
+images are pruned after saving and appending the record. JSONL audit records are
+kept indefinitely and may reference pruned images; check file existence when
+reviewing. Image count is bounded, but JSONL disk usage grows over time. At the
+8 MiB snapshot limit, 336 images can require about 2.6 GiB plus audit records.
+
+Home Assistant's add-on `/data` persists across restarts and add-on updates;
+history is separate from `/data/model-cache`. Set `save_history: false` to stop
+new image and audit writes. This does not delete existing history or prune it.
+To delete collected data, stop the add-on and remove `/data/history` using an
+operator-controlled method with access to the add-on data directory. Retained
+camera images should be treated as private data.
+
+UI/API fields `history_status` (`idle`, `disabled`, `saved`, or `error`) and
+`history_error` expose collection status without filesystem exception details.
+History errors never discard completed analysis results. A partial filesystem
+failure can leave an image without a record, or defer pruning until the next
+successful write. Status refers to the latest completed collection attempt.
+
 ## A/B comparison and memory
 
 Each permitted analysis makes exactly one Core `GET /api/camera_proxy/<entity>`
@@ -54,14 +118,14 @@ and streamed reads have a 30-second deadline checked between chunks. A blocked
 read can extend the total deadline by up to the read timeout. Snapshots are
 limited to 8 MiB encoded and 16 million pixels decoded. Invalid images fail
 closed. The same immutable encoded bytes are passed through stdin to each
-worker; both decode the same image into RGB in memory. There is no image write,
-image endpoint, image thumbnail, image cache or temporary image file.
+worker; both decode the same image into RGB in memory. The parent retains those exact original encoded bytes when history is enabled.
+There is no image endpoint or thumbnail.
 
 Workers run **sequentially**, MobileNet then Prithiv, each with a 15-minute timeout
 including download/load/inference. They exit after inference (or are killed and
 reaped on timeout), so no two models are resident together. The parent never
 imports torch. This trades repeat disk loading/import latency for reliable model
-memory release, including allocator memory that Python GC may retain. Only
+memory release, including allocator memory that Python GC may retain. Model
 weights/configs are persistently cached in `/data/model-cache`. No whole-repository
 snapshot download, training checkpoint directories, optimizer files or datasets
 are fetched. No quantization, conversion, fine-tuning or GPU execution is used.
@@ -161,10 +225,12 @@ python -m compileall -q weather_camera_poc
 sh -n weather_camera_poc/run.sh
 ```
 
-Validation in this worker: **30 focused tests passed** (Python 3.13 test host;
-all application/test sources also parsed with Python 3.11 grammar). YAML and
-add-on contract checks and `sh -n` passed. No live Supervisor schema validation
-was performed.
+Focused coverage includes sensor payloads, publication order, confidence gating,
+candidate/publication failure isolation, REST transport, snapshot identity,
+history save/JSONL, bounded retention,
+disabled collection and filesystem failure isolation, alongside the existing
+scheduling, security and add-on contract checks. No live Supervisor schema
+validation was performed.
 
 The worker environment had no Docker executable, so only static Dockerfile,
 entrypoint, YAML/schema consistency and Python validation were possible. No
@@ -172,13 +238,11 @@ claim of container or Raspberry Pi runtime success is made.
 
 ## Later fine-tuning
 
-First evaluate both candidates against manually labeled, representative camera
-stills across weather, seasons and lighting. A later opt-in collection workflow
-must define privacy, consent, retention/deletion and labeling before saving any
-images. Split by capture date/event to avoid near-duplicate train/test leakage;
-reserve a held-out camera test set, examine class confusion/calibration, then
-fine-tune and compare against these pinned baselines. No dataset retention or
-training workflow is implemented here.
+Evaluate both candidates against manually labeled, representative camera stills
+across weather, seasons and lighting using the retained history. Split by capture
+date/event to avoid near-duplicate train/test leakage; reserve a held-out camera
+test set and examine class confusion/calibration before fine-tuning. Collection
+is implemented; labeling and training remain manual future work.
 
 ## Sources
 
