@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.33
+
+- Add read-only `ha_get_camera_snapshot` for bounded Home Assistant camera stills, including JPEG/PNG input, metadata stripping, 768 px maximum output dimension and secret-safe failure handling.
+- Adds Pillow as the pinned image dependency; existing Home Assistant tools and write permissions are unchanged.
+- Source: `9edde6f93ce2b456357192bc3a79026cc0bcdf9d`; published image: `ghcr.io/deluka-be/hevy-personal-mcp:0.2.33`, multiarch manifest `sha256:1f8dccbe3cd7010b33f7befa4e9fc1d735c35071a64a1bf4e1bb0366db900121` (workflow `40191086281`, all jobs successful). Rollback: `0.2.32`, unchanged manifest `sha256:4a1681a93ed46256a2a55f9908e778b0eeacbd19806d8f6f7e1bc185d9eadfce`.
+
 ## 0.2.31
 
 - Add optional, disabled-by-default LoopData running-session tools on `/mcp` with SELECT-only access to `loopdata.running_workouts` (`apple_health`).
