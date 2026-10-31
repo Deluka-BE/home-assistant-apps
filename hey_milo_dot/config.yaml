@@ -1,0 +1,31 @@
+name: Milo Dot Alpha
+version: "0.1.0"
+slug: hey_milo_dot
+description: Persistent Lex worker with optional advisory Qwen reviews
+arch:
+  - aarch64
+  - amd64
+startup: application
+boot: manual
+stage: experimental
+init: false
+hassio_api: false
+homeassistant_api: false
+host_network: false
+full_access: false
+options:
+  bridge_endpoint: ""
+  bridge_token: ""
+  bridge_ca_pem: ""
+  poll_interval: 5
+  max_backoff: 60
+  gwen_endpoint: ""
+  gwen_timeout: 30
+schema:
+  bridge_endpoint: str
+  bridge_token: password
+  bridge_ca_pem: str
+  poll_interval: float(0.05,3600)
+  max_backoff: float(0.05,3600)
+  gwen_endpoint: str
+  gwen_timeout: float(0.01,120)
