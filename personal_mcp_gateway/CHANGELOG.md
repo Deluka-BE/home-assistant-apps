@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.37
+
+- Add configurable log_level: fatal, error, warn, info (default), debug. Restart the app after changing the level.
+- Add safe Bridge diagnostics with fixed operation, HTTP status and allowlisted error codes; keep credentials, headers, payloads, tasks and raw exceptions out of these logs.
+- Preserve TLS pinning, authentication and mutation behavior; access logs stay disabled.
+- Source: `893c7ef1634354f47c8f4f6eb2b701b70757fdcb`; published multiarch image `ghcr.io/deluka-be/hevy-personal-mcp:0.2.37`, manifest `sha256:193dc38eb8d37bde5c1dae3c8f7dcc745e94511f3df3ac19aab5cf28092077d7` (workflow `41320335648`, all jobs successful). Rollback: `0.2.36`, unchanged manifest `sha256:38eb27045770982c58b2e8d458cf32d911d9fd985ed4ce493c5432d18e99ef7c`.
+
 ## 0.2.34
 
 - Return `ha_get_camera_snapshot` as native MCP image content instead of embedding JPEG base64 inside JSON text, with concise companion metadata.

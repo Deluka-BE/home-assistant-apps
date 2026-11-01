@@ -114,3 +114,11 @@ Resultaten bevatten samenvatting, kilometergegevens, hartslag en herstel met
 expliciete dekking en aantallen weggelaten gegevens; geen ruwe JSON, GPS of weer.
 Bronrevisie: `fbeadbc140ec75d5431d94b0298e3d0fcc7512f3`; volgens de
 bronvalidatie zijn 573 gatewaytests geslaagd. Rollbackversie: `0.2.30`.
+
+## Instelbaar logniveau (voorbereid voor volgende release)
+
+`log_level` kiest `fatal`, `error`, `warn`, `info` (standaard) of `debug`.
+De optie vereist de bijbehorende nieuwe Gateway-image; publiceer dit schema
+niet met een oudere image. Debug toont veilige Bridge-operaties, HTTP-status
+en vaste foutcodes. Taken, requestbodies, headers en tokens worden niet gelogd.
+Het publieke Auth0/Funnel-ingangspunt en TLS/pincontrole blijven behouden.

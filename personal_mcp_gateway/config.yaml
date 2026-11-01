@@ -1,5 +1,5 @@
 name: "Persoonlijke MCP HAOS"
-version: "0.2.36"
+version: "0.2.37"
 slug: "personal_mcp_gateway"
 description: "Persoonlijke Auth0-beveiligde MCP voor Hevy, iCloud Calendar, Spotify, Node-RED en Home Assistant"
 url: "https://github.com/Deluka-BE/home-assistant-apps"
@@ -28,6 +28,7 @@ environment:
   MCP_CONFIG_SOURCE: "homeassistant"
   PORT: "8000"
 options:
+  log_level: info
   hevy_api_key: null
   auth0_domain: null
   auth0_owner_sub: null
@@ -62,6 +63,7 @@ options:
   loopdata_tls_mode: "verify"
   loopdata_ca_file: ""
 schema:
+  log_level: list(fatal|error|warn|info|debug)
   hevy_api_key: password
   auth0_domain: str
   auth0_owner_sub: str
