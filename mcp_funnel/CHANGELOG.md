@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.2
+
+- Sync runtime and container checks from `Deluka-BE/personal-mcp-gateway`
+  commit `cd4969934aa90334719f1ccf6690f6729e38e67d`.
+- Suppress transient startup error categories when Tailscale becomes ready within
+  the 30-second grace period; retain sanitized timeout and later diagnostics.
+- Align container assertions with successful startup suppression.
+- Update catalog version, Docker version label and upstream source revision.
+
 ## 0.1.1
 
 - Sync runtime and container checks from `Deluka-BE/personal-mcp-gateway`

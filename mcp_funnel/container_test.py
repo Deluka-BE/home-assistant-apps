@@ -176,9 +176,12 @@ def main(image):
             assert "fake-private-state" not in docker("logs", name)
             logs = docker("logs", name)
             assert "FAKE-CREDENTIAL" not in logs and "user@example.com" not in logs
-            for message in ("start_login()", "PID=", "exitcode=0", "JSON received", "AuthURL found",
-                            "daemon: TLS connection", "login stderr: permission denied"):
+            for message in ("start_login()", "PID=", "exitcode=0", "JSON received", "AuthURL found"):
                 assert message in logs, message
+            # Successful readiness discards transient startup error categories.
+            for message in ("daemon: TLS connection", "login stderr: permission denied",
+                            "Tailscale readiness timeout"):
+                assert message not in logs, message
             assert docker("exec", "--user", "10002:10002", name, "cat", "/data/tailscale/configure-count") == "1"
             docker("stop", "-t", "25", name)
             assert docker("inspect", "--format", "{{.State.ExitCode}}", name) == "0"

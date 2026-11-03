@@ -1,5 +1,23 @@
 # Validation record
 
+## Catalog 0.1.2 (2026-11-03)
+
+- Runtime and container checks are byte-for-byte copies from personal-mcp-gateway
+  commit `cd4969934aa90334719f1ccf6690f6729e38e67d`, verified by Git blob IDs.
+- Ran 33 upstream unit/mocked tests against this catalog copy: all passed.
+  Only ROOT/ADDON paths were adapted in a temporary test copy; the upstream
+  workflow test was excluded because that workflow is absent from this catalog.
+- Validated catalog YAML, version/label/source consistency, pinned bases, Docker
+  COPY inputs, Python syntax, container fixture compilation and `git diff --check`.
+- Docker is unavailable in this worker. Native amd64/arm64 builds, container
+  execution and authenticated public Funnel acceptance remain unverified.
+- Catalog 0.1.2 is prepared for HA repository refresh and local source builds;
+  there is no prebuilt `image` field or external image publication requirement.
+  No Home Assistant installation/deployment or live configuration was performed.
+
+Earlier records below are historical and do not establish native build or live
+acceptance results for 0.1.2.
+
 ## Catalog 0.1.1 (2026-11-03)
 
 - Runtime and container checks synced from personal-mcp-gateway commit

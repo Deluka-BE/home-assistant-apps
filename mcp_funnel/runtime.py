@@ -68,11 +68,27 @@ def settings_args(socket: Path = SOCKET) -> list[str]:
 
 class Diagnostics:
     """Fixed messages only, bounded per process lifetime; never echo raw output."""
-    def __init__(self):
+    def __init__(self, startup_grace: bool = False):
         self.lock = threading.Lock()
         self.remaining = 200
         self.events = set()
         self.urls = set()
+        self.startup_deadline = time.monotonic() + 30 if startup_grace else None
+        self.pending_errors = {}
+        self.startup_timed_out = False
+
+    def finish_startup(self, ready: bool = False) -> None:
+        with self.lock:
+            if self.startup_deadline is None:
+                return
+            if not ready and time.monotonic() < self.startup_deadline:
+                return
+            pending = list(self.pending_errors.items()) if not ready else []
+            self.startup_timed_out = not ready
+            self.pending_errors.clear()
+            self.startup_deadline = None
+        for key, message in pending:
+            self.event(key, "Tailscale readiness timeout (30 seconds); " + message)
 
     def event(self, key: str, message: str) -> None:
         with self.lock:
@@ -113,8 +129,15 @@ class Diagnostics:
         if category is None and (required or any(x in lowered for x in ("error", "failed", "fatal"))):
             category = "unclassified failure/output"
         if category:
-            self.event(source + "-" + category,
-                       source + ": " + category + " (raw output withheld).")
+            key = source + "-" + category
+            message = source + ": " + category + " (raw output withheld)."
+            with self.lock:
+                if self.startup_deadline is not None:
+                    # Retain only fixed categories, never subprocess text.
+                    if len(self.pending_errors) < 32:
+                        self.pending_errors[key] = message
+                    return
+            self.event(key, message)
 
     def status(self, status) -> None:
         states = {"NoState", "NeedsLogin", "NeedsMachineAuth", "Stopped", "Starting", "Running"}
@@ -194,9 +217,10 @@ def command_json(args: list[str], diagnostics: Diagnostics | None = None) -> dic
         if value is None and args[-3:] == ["funnel", "status", "--json"]:
             return {}
         return value if isinstance(value, dict) else None
-    except (OSError, ValueError, subprocess.TimeoutExpired):
+    except (OSError, ValueError, subprocess.TimeoutExpired) as exc:
         if diagnostics is not None:
-            diagnostics.event("query-failure", "CLI query: execution/JSON failure (details withheld).")
+            diagnostics.error("timeout" if isinstance(exc, subprocess.TimeoutExpired)
+                              else str(exc), "CLI query", required=True)
         return None
 
 
@@ -265,7 +289,7 @@ class Supervisor:
         self.retry_delay = 1.0
         self.settings_ready = False
         self.last_message = None
-        self.diagnostics = Diagnostics()
+        self.diagnostics = Diagnostics(startup_grace=True)
 
     def notify(self, message: str) -> None:
         if message != self.last_message:
@@ -294,6 +318,7 @@ class Supervisor:
                 self.notify("Funnel configuration timed out; retrying without resetting state.")
             self.writer = None
         status = command_json(cli_args("status", "--json", socket=self.socket), self.diagnostics)
+        self.diagnostics.finish_startup(ready=connected(status))
         self.diagnostics.status(status)
         if self.login is not None and self.login.poll() is not None:
             code = self.login.returncode
@@ -311,7 +336,12 @@ class Supervisor:
             elif status and status.get("BackendState") == "NeedsMachineAuth":
                 self.notify("Waiting for Tailscale administrator machine approval; state retained.")
             else:
-                self.notify("Waiting for Tailscale readiness; existing state retained (retry capped at 30 seconds).")
+                if self.diagnostics.startup_deadline is not None:
+                    self.notify("Tailscale not ready yet — retrying; existing state retained.")
+                else:
+                    if self.diagnostics.startup_timed_out:
+                        self.diagnostics.event("readiness-timeout", "Tailscale readiness timeout (30 seconds); backend not ready; existing state retained.")
+                    self.notify("Waiting for Tailscale readiness; existing state retained (retry capped at 30 seconds).")
             return
         self.retry_delay = 1.0
         if self.login is not None:
@@ -364,7 +394,10 @@ class Supervisor:
             # and authentication independently; transient failures never run up.
             while not self.stop.is_set():
                 self.tick()
-                self.stop.wait(5 if self.retry_delay == 1 else self.retry_delay)
+                delay = 5 if self.retry_delay == 1 else self.retry_delay
+                if self.diagnostics.startup_deadline is not None:
+                    delay = min(delay, max(0, self.diagnostics.startup_deadline - time.monotonic()))
+                self.stop.wait(delay)
             return 0
         except (OSError, RuntimeError):
             log("Startup/daemon failure; state retained. Check add-on storage and binary availability.")

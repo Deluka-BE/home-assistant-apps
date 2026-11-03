@@ -4,16 +4,16 @@ Independent HAOS add-on: public Tailscale HTTPS 443 -> host loopback
 `http://127.0.0.1:8000`. The existing Gateway 0.2.0, Render, Auth0 and community
 Tailscale add-on are not modified by this package.
 
-## Version 0.1.1 and catalog delivery
+## Version 0.1.2 and catalog delivery
 
 Runtime and container checks are synced from `Deluka-BE/personal-mcp-gateway`
-commit `97fbc4e65c082468e2453f082a3d049a30c25ac5`.
+commit `cd4969934aa90334719f1ccf6690f6729e38e67d`.
 
 This catalog builds MCP Funnel from the local `mcp_funnel/` Dockerfile and runtime;
 there is no prebuilt `image` setting or Funnel publication workflow here. The
-catalog version and Docker version label are both 0.1.1. After refreshing this
-repository in the Home Assistant add-on store, an existing 0.1.0 installation
-should offer 0.1.1 and build it locally when the user chooses to update. No
+catalog version and Docker version label are both 0.1.2. After refreshing this
+repository in the Home Assistant add-on store, an existing 0.1.0 or 0.1.1 installation
+should offer 0.1.2 and build it locally when the user chooses to update. No
 external image publication is required. See CHANGELOG.md and VALIDATION.md for
 changes and validation limits.
 
