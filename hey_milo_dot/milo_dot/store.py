@@ -77,6 +77,7 @@ class Store:
                 advice TEXT NOT NULL, evidence TEXT NOT NULL
             )""")
             self.db.execute('CREATE TABLE IF NOT EXISTS gwen_attempts (job_id TEXT NOT NULL REFERENCES jobs(id), result_hash TEXT NOT NULL, PRIMARY KEY(job_id,result_hash))')
+            self.db.execute('CREATE TABLE IF NOT EXISTS pc_wake_attempt (singleton INTEGER PRIMARY KEY CHECK(singleton=1))')
             self.db.execute('PRAGMA user_version=4')
 
     def close(self):
@@ -194,6 +195,15 @@ class Store:
                 job['lease_until'] is None or job['lease_until'] <= self.clock()):
             raise StaleClaim('claim expired or superseded')
         return job
+
+    def pc_deferred(self, job_id, owner, fence, readiness):
+        with self.transaction():
+            job = self._guard(job_id, owner, fence)
+            if job['state'] == 'claimed':
+                self._change(job, 'queued')
+            self.db.execute('UPDATE jobs SET owner=NULL,lease_until=NULL WHERE id=?', (job_id,))
+            self._event(job_id, 'pc_readiness', readiness)
+            return self.get(job_id)
 
     def begin_dispatch(self, job_id, owner, fence):
         with self.transaction():

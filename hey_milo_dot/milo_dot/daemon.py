@@ -42,7 +42,7 @@ def review_one(store, endpoint, timeout, stopped):
 
 
 def serve(store, bridge, poll_interval=5, max_backoff=60, gwen_endpoint=None,
-          gwen_timeout=30, stop=None, install_signals=True):
+          gwen_timeout=30, stop=None, install_signals=True, pc=None):
     poll_interval, max_backoff = interval(poll_interval), interval(max_backoff)
     if max_backoff < poll_interval:
         raise ValueError('backoff must be at least poll interval')
@@ -56,7 +56,7 @@ def serve(store, bridge, poll_interval=5, max_backoff=60, gwen_endpoint=None,
         while not stop.is_set():
             failed = []
             tick(store, bridge, lease_seconds=300, stopped=stop.is_set,
-                 on_error=lambda: failed.append(True))
+                 on_error=lambda: failed.append(True), pc=pc, wake_wait=stop.wait)
             if gwen_endpoint and not stop.is_set():
                 review_one(store, gwen_endpoint, gwen_timeout, stop.is_set)
             delay = min(max_backoff, delay * 2) if failed else poll_interval

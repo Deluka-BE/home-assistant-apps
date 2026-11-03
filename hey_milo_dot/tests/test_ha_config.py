@@ -32,3 +32,25 @@ class HAConfigTests(unittest.TestCase):
             with self.assertRaises(OSError):
                 provision({'bridge_endpoint':'https://example.test','bridge_token':'synthetic','bridge_ca_pem':'fixture'},td)
             self.assertEqual(target.read_text(),'preserve')
+
+
+class PCConfigTests(unittest.TestCase):
+    def test_optional_scoped_gateway_config(self):
+        with tempfile.TemporaryDirectory() as td, patch('ssl.create_default_context'):
+            provision({'bridge_endpoint': 'https://bridge.invalid',
+                       'bridge_token': 'synthetic', 'bridge_ca_pem': 'fixture',
+                       'pc_wake_endpoint': 'https://gateway.invalid',
+                       'pc_wake_token': 'synthetic-wake', 'pc_wake_ca_pem': 'fixture'}, td)
+            config = json.loads((Path(td) / 'bridge.json').read_text())
+            self.assertEqual(config['pc_wake']['endpoint'], 'https://gateway.invalid')
+            token = Path(config['pc_wake']['token_file'])
+            self.assertEqual(token.read_text(), 'synthetic-wake')
+            self.assertEqual(token.stat().st_mode & 0o777, 0o600)
+            self.assertNotIn('synthetic-wake', json.dumps(config))
+
+    def test_missing_gateway_token_rejected(self):
+        with tempfile.TemporaryDirectory() as td, patch('ssl.create_default_context'):
+            with self.assertRaises(ValueError):
+                provision({'bridge_endpoint': 'https://bridge.invalid',
+                           'bridge_token': 'synthetic', 'bridge_ca_pem': 'fixture',
+                           'pc_wake_endpoint': 'https://gateway.invalid'}, td)

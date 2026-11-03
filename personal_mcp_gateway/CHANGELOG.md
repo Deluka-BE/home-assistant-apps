@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.38
+
+Adds a default-off Milo PC-wake capability with a dedicated credential. Only the fixed PC reachability read and button.pc_wakker_maken action are accepted; other requests are rejected before Home Assistant access. Existing MCP and Auth0 routes are retained.
+
 ## 0.2.37
 
 - Add configurable log_level: fatal, error, warn, info (default), debug. Restart the app after changing the level.

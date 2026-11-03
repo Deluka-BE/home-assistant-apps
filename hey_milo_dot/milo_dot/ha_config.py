@@ -22,6 +22,23 @@ def provision(options, directory):
     directory.mkdir(mode=0o700, parents=True, exist_ok=True)
     contents = {'bridge-token': token.strip(), 'bridge-ca.pem': certificate}
     config = {'endpoint': endpoint, 'token_file': str(directory / 'bridge-token'), 'ca_file': str(directory / 'bridge-ca.pem')}
+    if options.get('pc_wake_endpoint'):
+        wake_endpoint = options['pc_wake_endpoint']
+        u = urlsplit(wake_endpoint)
+        if (u.scheme != 'https' or not u.hostname or u.username or u.password
+                or u.path not in ('', '/') or u.query or u.fragment):
+            raise ValueError('scoped HA gateway HTTPS origin required')
+        wake_token = options.get('pc_wake_token', '')
+        if not isinstance(wake_token, str) or not wake_token.strip() or any(c in wake_token for c in '\r\n'):
+            raise ValueError('scoped HA gateway token required')
+        wake_ca = options.get('pc_wake_ca_pem', '')
+        if not isinstance(wake_ca, str) or not wake_ca.strip():
+            raise ValueError('trusted gateway certificate required')
+        ssl.create_default_context(cadata=wake_ca)
+        contents.update({'pc-wake-token': wake_token.strip(), 'pc-wake-ca.pem': wake_ca})
+        config['pc_wake'] = {'endpoint': wake_endpoint,
+                             'token_file': str(directory / 'pc-wake-token'),
+                             'ca_file': str(directory / 'pc-wake-ca.pem')}
     contents['bridge.json'] = json.dumps(config)
     for name, content in contents.items():
         path = directory / name

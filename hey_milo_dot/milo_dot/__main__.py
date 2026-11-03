@@ -100,11 +100,19 @@ def main():
                         raise ValueError('invalid Gwen timeout')
             bridge = Bridge(config['endpoint'], lambda: token_path.read_text().strip(),
                             ca_file=str(ca_path) if ca_path else None, timeout=config.get('timeout', 15))
+            pc = None
+            if 'pc_wake' in config:
+                from .pc import PCWake
+                wake = config['pc_wake']
+                wake_token = external_path(wake['token_file'])
+                wake_ca = external_path(wake['ca_file']) if wake.get('ca_file') else None
+                pc = PCWake(wake['endpoint'], lambda: wake_token.read_text().strip(),
+                            ca_file=str(wake_ca) if wake_ca else None)
             if args.command == 'serve':
                 from .daemon import serve
-                serve(store, bridge, args.poll_interval, args.max_backoff, args.gwen_endpoint, args.gwen_timeout)
+                serve(store, bridge, args.poll_interval, args.max_backoff, args.gwen_endpoint, args.gwen_timeout, pc=pc)
                 return 0
-            result = tick(store, bridge)
+            result = tick(store, bridge, lease_seconds=300, pc=pc)
         elif args.command in ('get', 'events'):
             result = getattr(store, args.command)(args.id)
         elif args.command in ('list', 'recover'):

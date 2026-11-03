@@ -1,5 +1,5 @@
 name: Milo Dot Alpha
-version: "0.1.0"
+version: "0.1.1"
 slug: hey_milo_dot
 description: Persistent Lex worker with optional advisory Qwen reviews
 arch:
@@ -19,6 +19,9 @@ options:
   bridge_ca_pem: ""
   poll_interval: 5
   max_backoff: 60
+  pc_wake_endpoint: ""
+  pc_wake_token: ""
+  pc_wake_ca_pem: ""
   gwen_endpoint: ""
   gwen_timeout: 30
 schema:
@@ -27,5 +30,8 @@ schema:
   bridge_ca_pem: str
   poll_interval: float(0.05,3600)
   max_backoff: float(0.05,3600)
+  pc_wake_endpoint: str
+  pc_wake_token: password
+  pc_wake_ca_pem: str
   gwen_endpoint: str
   gwen_timeout: float(0.01,120)
