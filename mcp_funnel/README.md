@@ -4,18 +4,24 @@ Independent HAOS add-on: public Tailscale HTTPS 443 -> host loopback
 `http://127.0.0.1:8000`. The existing Gateway 0.2.0, Render, Auth0 and community
 Tailscale add-on are not modified by this package.
 
-## Version 0.1.2 and catalog delivery
+## Version 0.1.3 and catalog delivery
 
 Runtime and container checks are synced from `Deluka-BE/personal-mcp-gateway`
-commit `cd4969934aa90334719f1ccf6690f6729e38e67d`.
+commit `7f39ed8006c15ef57b501b7da1bed3fe60783fbd`.
 
 This catalog builds MCP Funnel from the local `mcp_funnel/` Dockerfile and runtime;
 there is no prebuilt `image` setting or Funnel publication workflow here. The
-catalog version and Docker version label are both 0.1.2. After refreshing this
-repository in the Home Assistant add-on store, an existing 0.1.0 or 0.1.1 installation
-should offer 0.1.2 and build it locally when the user chooses to update. No
+catalog version and Docker version label are both 0.1.3. After refreshing this
+repository in the Home Assistant add-on store, an existing 0.1.0, 0.1.1 or 0.1.2 installation
+should offer 0.1.3 and build it locally when the user chooses to update. No
 external image publication is required. See CHANGELOG.md and VALIDATION.md for
 changes and validation limits.
+
+Version 0.1.3 distinguishes expected shutdown/restart EOF, unexpected daemon exits
+(including exit code zero), and closed output pipes while the daemon remains alive.
+A bounded 200 ms wait handles EOF/exit races; duplicate exit reports are suppressed.
+Logs use IANA `Europe/Brussels`: winter `+01:00`, summer `+02:00`. The container
+explicitly installs Debian `tzdata`; missing timezone data fails startup.
 
 ## Design and security
 
@@ -64,7 +70,8 @@ per supervisor lifetime, including failed attempts. A failed login needs operato
 review/restart. After connection, `tailscale set` independently applies hostname,
 disabled DNS/route acceptance and netfilter settings. Failed settings retry after
 30 seconds and block new Funnel configuration without triggering login. Log lines
-include UTC timestamps. Signal handling remains active while waiting.
+include Europe/Brussels timestamps with ISO8601 offsets and automatic DST.
+Signal handling remains active while waiting.
 
 Gateway readiness requires exact HTTP 200 at `http://127.0.0.1:8000/health`.
 Redirects and environment HTTP proxies are disabled. Offline Gateway is retried
@@ -105,6 +112,8 @@ does not demonstrate working OAuth, `/mcp`, discovery, or SSE.
 From repository root:
 
 ```sh
+python -m pip install -r mcp_funnel/requirements-test.txt
+python -m unittest discover -s mcp_funnel/tests -v
 docker buildx build --platform linux/amd64 --load -t mcp-funnel:test mcp_funnel
 python mcp_funnel/container_test.py mcp-funnel:test
 ```

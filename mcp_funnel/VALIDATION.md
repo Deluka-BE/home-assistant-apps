@@ -1,5 +1,30 @@
 # Validation record
 
+## Catalog 0.1.3 (2026-11-03)
+
+- Synced pinned upstream commit `7f39ed8006c15ef57b501b7da1bed3fe60783fbd`.
+  Runtime, healthcheck, container tests, config and dockerignore match upstream
+  Git blob IDs. Dockerfile differs only in corrected source URL/revision labels.
+  The upstream tzdata install layer is retained exactly. No pip runtime dependency.
+- Upstream test suite retained with catalog ROOT/ADDON paths adapted; only the
+  absent upstream workflow test is explicitly skipped. 40 tests discovered,
+  39 passed, 1 skipped, including real subprocess EOF/exit races and winter/summer
+  Brussels offsets. Test dependency: PyYAML (see requirements-test.txt).
+- Checked YAML/security options, version/source labels, pinned multiarch bases,
+  Docker COPY inputs, Python syntax, container fixture compilation and diff whitespace.
+- User reports both upstream CI workflows succeeded for this exact commit.
+  This worker could not independently confirm main-triggered CI: the connected
+  query only covers PR runs. No Docker executable is available here, so no local
+  image build or container execution is claimed.
+- No image field or MCP Funnel publishing workflow exists in this catalog. HA
+  builds this source locally on install/update; no separate image/tag publication
+  is pending. Successful installation still depends on the HA build.
+- No HA installation, restart, live Funnel acceptance or other add-on change.
+
+Earlier records below are historical and do not establish build/live acceptance
+results for 0.1.3. The user explicitly authorized this catalog release based on
+upstream CI success; authenticated HAOS acceptance remains separate.
+
 ## Catalog 0.1.2 (2026-11-03)
 
 - Runtime and container checks are byte-for-byte copies from personal-mcp-gateway

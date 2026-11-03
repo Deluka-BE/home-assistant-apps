@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.3
+
+- Sync exact runtime and container checks from `Deluka-BE/personal-mcp-gateway`
+  commit `7f39ed8006c15ef57b501b7da1bed3fe60783fbd`.
+- Classify daemon EOF by lifecycle, report unexpected exit codes, allow a bounded
+  200 ms exit race, and deduplicate reader/supervisor exit diagnostics.
+- Use Europe/Brussels ISO8601 timestamps with automatic DST on all log paths;
+  explicitly install tzdata in the HA container.
+- Include upstream regression tests adapted to the catalog layout, and update
+  catalog/Docker version and source revision metadata.
+- Source-built catalog release; no prebuilt image publication is required.
+
 ## 0.1.2
 
 - Sync runtime and container checks from `Deluka-BE/personal-mcp-gateway`

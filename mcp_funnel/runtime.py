@@ -1,7 +1,8 @@
 """Independent userspace Funnel supervisor. Python standard library only."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime
+from zoneinfo import ZoneInfo
 import json
 import os
 from pathlib import Path
@@ -17,11 +18,12 @@ DATA = Path("/data/tailscale")
 SOCKET = DATA / "tailscaled.sock"
 ORIGIN = "http://127.0.0.1:8000"
 UID = 10002
+LOG_ZONE = ZoneInfo("Europe/Brussels")
 LOGIN_URL = re.compile(r"https://login\.tailscale\.com/a/[A-Za-z0-9]+")
 
 
 def log(message: str) -> None:
-    timestamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    timestamp = datetime.now(LOG_ZONE).isoformat(timespec="seconds")
     print(f"{timestamp} MCP Funnel: {message}", flush=True)
 
 
@@ -190,14 +192,17 @@ def read_login(stream, diagnostics=None) -> None:
         diagnostics.event("stdout-exception", "Login stdout reader: exception (details withheld).")
 
 
-def read_errors(stream, diagnostics: Diagnostics, source: str) -> None:
+def read_errors(stream, diagnostics: Diagnostics, source: str, on_eof=None) -> None:
     try:
         while True:
             chunk = stream.readline(4096)
             if not isinstance(chunk, str):
                 raise TypeError
             if not chunk:
-                diagnostics.event(source + "-eof", source + " reader: EOF.")
+                if on_eof is not None:
+                    on_eof()
+                else:
+                    diagnostics.event(source + "-eof", source + " reader: EOF.")
                 return
             diagnostics.error(chunk, source, required=source != "daemon")
     except Exception:
@@ -281,6 +286,8 @@ class Supervisor:
         self.socket = data / "tailscaled.sock"
         self.stop = threading.Event()
         self.daemon = None
+        self.daemon_reader = None
+        self.closing = threading.Event()
         self.login = None
         self.writer = None
         self.writer_started = 0.0
@@ -290,6 +297,25 @@ class Supervisor:
         self.settings_ready = False
         self.last_message = None
         self.diagnostics = Diagnostics(startup_grace=True)
+
+    def daemon_exit(self, code: int) -> None:
+        self.diagnostics.event("daemon-exit", f"Tailscale daemon exited unexpectedly: exitcode={code}; state retained.")
+
+    def daemon_eof(self) -> None:
+        # Pipe EOF can precede process reaping. Give normal exit a bounded chance
+        # to settle, then distinguish a still-live process. Never wait indefinitely.
+        try:
+            code = self.daemon.wait(timeout=0.2)
+        except subprocess.TimeoutExpired:
+            code = self.daemon.poll()
+        if self.stop.is_set() or self.closing.is_set():
+            self.diagnostics.event("daemon-eof-shutdown",
+                                   "daemon stdout/stderr reader: EOF during expected shutdown/restart.")
+        elif code is not None:
+            self.daemon_exit(code)
+        else:
+            self.diagnostics.event("daemon-eof-alive",
+                                   "daemon stdout/stderr reader: unexpected EOF while daemon is still alive; output diagnostics unavailable.")
 
     def notify(self, message: str) -> None:
         if message != self.last_message:
@@ -308,8 +334,12 @@ class Supervisor:
         threading.Thread(target=read_errors, args=(self.login.stderr, self.diagnostics, "login stderr"), daemon=True).start()
 
     def tick(self) -> None:
-        if self.daemon.poll() is not None:
-            raise RuntimeError("Tailscale daemon stopped")
+        code = self.daemon.poll()
+        if code is not None:
+            if not self.stop.is_set():
+                self.daemon_exit(code)
+                raise RuntimeError("Tailscale daemon stopped")
+            return
         if self.writer is not None:
             if self.writer.poll() is None:
                 if time.monotonic() - self.writer_started < 30:
@@ -389,7 +419,11 @@ class Supervisor:
         try:
             self.daemon = subprocess.Popen(daemon_args(self.data), stdin=subprocess.DEVNULL,
                                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace")
-            threading.Thread(target=read_errors, args=(self.daemon.stdout, self.diagnostics, "daemon"), daemon=True).start()
+            self.daemon_reader = threading.Thread(
+                target=read_errors,
+                args=(self.daemon.stdout, self.diagnostics, "daemon", self.daemon_eof),
+                daemon=True)
+            self.daemon_reader.start()
             # A responsive LocalAPI proves liveness only. tick decides readiness
             # and authentication independently; transient failures never run up.
             while not self.stop.is_set():
@@ -403,6 +437,9 @@ class Supervisor:
             log("Startup/daemon failure; state retained. Check add-on storage and binary availability.")
             return 1
         finally:
+            # Set before terminating any child: teardown EOF is expected even
+            # after another startup failure. Earlier exit diagnostics stay visible.
+            self.closing.set()
             stop_process(self.writer, 1)
             stop_process(self.login, 1)
             if self.login is not None:
@@ -410,6 +447,8 @@ class Supervisor:
                 code = self.login.returncode if isinstance(self.login.returncode, int) else 0
                 self.diagnostics.event(f"login-exit-{pid}", f"Login process exited: PID={pid}; exitcode={code} (shutdown).")
             stop_process(self.daemon, 15)
+            if self.daemon_reader is not None:
+                self.daemon_reader.join(timeout=1)
 
 
 def main() -> int:
