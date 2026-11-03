@@ -109,8 +109,10 @@ if args[0]=='up':
   print(json.dumps({'AuthURL':'https://login.tailscale.com/a/fake123','secret':'fake-private-state'}))
   (p/'authorized').write_text('fake-only')
  else: print(json.dumps({'BackendState':'Running'}))
+elif args[0]=='set':
+ pass
 elif args[0]=='status':
- print(json.dumps({'BackendState':'Running','Self':{'Online':True,'DNSName':domain+'.'}}))
+ print(json.dumps({'BackendState':'Running','Self':{'Online':True,'DNSName':domain+'.'}}) if (p/'authorized').exists() else json.dumps({'BackendState':'NeedsLogin'}))
 elif args[:2]==['funnel','status']:
  print((p/'mock-funnel.json').read_text() if (p/'mock-funnel.json').exists() else '{}')
 elif args[0]=='funnel' and '--bg' in args:
@@ -184,6 +186,7 @@ def main(image):
             docker(*args, image)
             eventually(lambda: "Ready:" in docker("logs", name))
             assert "Authorize this new node" not in docker("logs", name)
+            assert "start_login()" not in docker("logs", name)
             assert docker("exec", "--user", "10002:10002", name, "cat", "/data/tailscale/configure-count") == "1"
             assert docker("exec", "--user", "10002:10002", name, "cat", "/data/tailscale/tailscaled.state") == "fake-private-state"
             assert docker("exec", "--user", "10002:10002", name, "cat", "/data/tailscale/stopped") == "yes"

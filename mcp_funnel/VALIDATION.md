@@ -1,5 +1,24 @@
 # Validation record
 
+## Catalog 0.1.1 (2026-11-03)
+
+- Runtime and container checks synced from personal-mcp-gateway commit
+  `97fbc4e65c082468e2453f082a3d049a30c25ac5`; runtime is byte-for-byte identical.
+- Ran 31 upstream unit/mocked tests against this catalog copy: all passed.
+  Only the test path was adapted and the source repository's workflow test was
+  excluded: that workflow is not present in this catalog.
+- Validated YAML, version/label consistency, pinned bases, Python syntax and
+  `git diff --check`.
+- No Docker executable is available in this worker; native image builds and
+  container gates were not run here. No live HA or Auth0 changes were made.
+- The catalog has no Funnel `image` field or Funnel publication workflow.
+  HA builds the add-on from local source during installation/update. After the
+  catalog is refreshed from main, 0.1.1 should be offered; successful installation
+  still depends on that build. No external image publication is pending.
+
+The older validation record below is historical and does not establish native
+build or live acceptance results for 0.1.1.
+
 Baseline: branch `ha-container-packaging`, commit
 `e67668274c426e9c00eacff5ccaf411e2875eb0f`.
 

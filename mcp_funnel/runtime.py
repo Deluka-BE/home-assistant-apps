@@ -1,6 +1,7 @@
 """Independent userspace Funnel supervisor. Python standard library only."""
 from __future__ import annotations
 
+from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
@@ -20,7 +21,8 @@ LOGIN_URL = re.compile(r"https://login\.tailscale\.com/a/[A-Za-z0-9]+")
 
 
 def log(message: str) -> None:
-    print(f"MCP Funnel: {message}", flush=True)
+    timestamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    print(f"{timestamp} MCP Funnel: {message}", flush=True)
 
 
 def prepare(data: Path = DATA) -> None:
@@ -51,6 +53,14 @@ def cli_args(*args: str, socket: Path = SOCKET) -> list[str]:
 
 def up_args(socket: Path = SOCKET) -> list[str]:
     return cli_args("up", "--json", "--hostname=mcp-funnel", "--accept-dns=false",
+                    "--accept-routes=false", "--advertise-routes=",
+                    "--advertise-exit-node=false", "--exit-node=",
+                    "--netfilter-mode=off", socket=socket)
+
+
+def settings_args(socket: Path = SOCKET) -> list[str]:
+    # set changes only these preferences and cannot initiate enrollment.
+    return cli_args("set", "--hostname=mcp-funnel", "--accept-dns=false",
                     "--accept-routes=false", "--advertise-routes=",
                     "--advertise-exit-node=false", "--exit-node=",
                     "--netfilter-mode=off", socket=socket)
@@ -250,7 +260,9 @@ class Supervisor:
         self.login = None
         self.writer = None
         self.writer_started = 0.0
-        self.next_login = 0.0
+        self.login_attempted = False
+        self.next_settings = 0.0
+        self.retry_delay = 1.0
         self.settings_ready = False
         self.last_message = None
         self.diagnostics = Diagnostics()
@@ -261,6 +273,7 @@ class Supervisor:
             self.last_message = message
 
     def start_login(self) -> None:
+        self.login_attempted = True
         self.diagnostics.event("login-start", "start_login(): starting interactive Tailscale up (no auth-key).")
         self.login = subprocess.Popen(up_args(self.socket), stdout=subprocess.PIPE,
                                       stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace",
@@ -287,21 +300,38 @@ class Supervisor:
             pid = self.login.pid if isinstance(self.login.pid, int) else 0
             self.diagnostics.event(f"login-exit-{pid}", f"Login process exited: PID={pid}; exitcode={code}.")
             self.login = None
-            self.settings_ready = code == 0
-            if code:
-                self.notify("Authentication/settings step failed; retrying without resetting state.")
-                self.next_login = time.monotonic() + 30
-        if not self.settings_ready and self.login is None:
-            if status is not None and time.monotonic() >= self.next_login:
-                self.start_login()
+        # LocalAPI availability is not proof that enrollment is needed. Never
+        # infer login from missing JSON, NoState, Starting, Stopped or DNS errors.
         if not connected(status):
-            if status and status.get("BackendState") in {"NoState", "NeedsLogin", "Stopped"}:
-                if self.login is None and time.monotonic() >= self.next_login:
+            self.retry_delay = min(self.retry_delay * 2, 30)
+            if status and status.get("BackendState") == "NeedsLogin":
+                if self.login is None and not self.login_attempted:
                     self.start_login()
-            self.notify("Waiting for Tailscale connection/login; existing state retained.")
+                self.notify("Tailscale login required; awaiting authorization (no automatic login retries).")
+            elif status and status.get("BackendState") == "NeedsMachineAuth":
+                self.notify("Waiting for Tailscale administrator machine approval; state retained.")
+            else:
+                self.notify("Waiting for Tailscale readiness; existing state retained (retry capped at 30 seconds).")
             return
-        if self.login is not None or not self.settings_ready:
+        self.retry_delay = 1.0
+        if self.login is not None:
             return
+        if not self.settings_ready:
+            if time.monotonic() < self.next_settings:
+                return
+            try:
+                result = subprocess.run(settings_args(self.socket), capture_output=True,
+                                        text=True, timeout=3, check=False,
+                                        stdin=subprocess.DEVNULL)
+                self.settings_ready = result.returncode == 0
+                if not self.settings_ready:
+                    self.diagnostics.error(result.stderr, "settings CLI", required=True)
+            except (OSError, subprocess.TimeoutExpired):
+                self.diagnostics.event("settings-failure", "Settings CLI unavailable/timed out (details withheld).")
+            if not self.settings_ready:
+                self.next_settings = time.monotonic() + 30
+                self.notify("Settings not ready; retrying without login or state reset.")
+                return
         domain = hostname(status)
         if domain is None:
             self.notify("Tailscale hostname unavailable; not configuring Funnel.")
@@ -330,17 +360,11 @@ class Supervisor:
             self.daemon = subprocess.Popen(daemon_args(self.data), stdin=subprocess.DEVNULL,
                                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace")
             threading.Thread(target=read_errors, args=(self.daemon.stdout, self.diagnostics, "daemon"), daemon=True).start()
-            # Wait for LocalAPI before the first settings/login command.
-            while not self.stop.is_set():
-                if self.daemon.poll() is not None:
-                    raise RuntimeError("Tailscale daemon stopped")
-                if command_json(cli_args("status", "--json", socket=self.socket), self.diagnostics) is not None:
-                    self.start_login()
-                    break
-                self.stop.wait(1)
+            # A responsive LocalAPI proves liveness only. tick decides readiness
+            # and authentication independently; transient failures never run up.
             while not self.stop.is_set():
                 self.tick()
-                self.stop.wait(5)
+                self.stop.wait(5 if self.retry_delay == 1 else self.retry_delay)
             return 0
         except (OSError, RuntimeError):
             log("Startup/daemon failure; state retained. Check add-on storage and binary availability.")

@@ -1,8 +1,21 @@
-# MCP Funnel (experimental, not published)
+# MCP Funnel (experimental)
 
 Independent HAOS add-on: public Tailscale HTTPS 443 -> host loopback
 `http://127.0.0.1:8000`. The existing Gateway 0.2.0, Render, Auth0 and community
 Tailscale add-on are not modified by this package.
+
+## Version 0.1.1 and catalog delivery
+
+Runtime and container checks are synced from `Deluka-BE/personal-mcp-gateway`
+commit `97fbc4e65c082468e2453f082a3d049a30c25ac5`.
+
+This catalog builds MCP Funnel from the local `mcp_funnel/` Dockerfile and runtime;
+there is no prebuilt `image` setting or Funnel publication workflow here. The
+catalog version and Docker version label are both 0.1.1. After refreshing this
+repository in the Home Assistant add-on store, an existing 0.1.0 installation
+should offer 0.1.1 and build it locally when the user chooses to update. No
+external image publication is required. See CHANGELOG.md and VALIDATION.md for
+changes and validation limits.
 
 ## Design and security
 
@@ -42,9 +55,16 @@ from `/data`; expired/revoked identity requires browser authorization again.
 ## Startup and recovery
 
 The controller installs SIGTERM/SIGINT handlers, prepares private storage, starts
-tailscaled and waits for its LocalAPI. It runs `tailscale up --json` with hostname,
-DNS/route acceptance disabled and netfilter off. Authentication waits do not block
-signal handling. Disconnected nodes wait without state reset.
+tailscaled and polls its LocalAPI. Existing authenticated state is reused without
+`tailscale up`. Missing socket/invalid status, DNS failures, `NoState`, `Starting`
+and offline status use interruptible polling with backoff capped at 30 seconds.
+`Stopped` waits without enrollment; `NeedsMachineAuth` waits for administrator
+approval. Only explicit `NeedsLogin` starts `tailscale up --json`, at most once
+per supervisor lifetime, including failed attempts. A failed login needs operator
+review/restart. After connection, `tailscale set` independently applies hostname,
+disabled DNS/route acceptance and netfilter settings. Failed settings retry after
+30 seconds and block new Funnel configuration without triggering login. Log lines
+include UTC timestamps. Signal handling remains active while waiting.
 
 Gateway readiness requires exact HTTP 200 at `http://127.0.0.1:8000/health`.
 Redirects and environment HTTP proxies are disabled. Offline Gateway is retried
@@ -85,15 +105,14 @@ does not demonstrate working OAuth, `/mcp`, discovery, or SSE.
 From repository root:
 
 ```sh
-python -m unittest discover -v
-docker buildx build --platform linux/amd64 --load -t mcp-funnel:test homeassistant/mcp-funnel
-python homeassistant/mcp-funnel/container_test.py mcp-funnel:test
+docker buildx build --platform linux/amd64 --load -t mcp-funnel:test mcp_funnel
+python mcp_funnel/container_test.py mcp-funnel:test
 ```
 
 Repeat the build and container test on a native arm64 Linux runner with
-`--platform linux/arm64`. `.github/workflows/funnel-test.yml` provides both native
-matrix jobs, manual dispatch only, read-only repository permission and `push: false`.
-No registry login, credentials, GHCR publication or production changes.
+`--platform linux/arm64`. The source repository has a `funnel-test.yml` workflow;
+this catalog does not include it. These local checks require no registry login,
+credentials, GHCR publication or production changes.
 
 `container_test.py` distinguishes a real unauthenticated userspace daemon test
 from mock CLI/daemon lifecycle tests. The latter use a real host-loopback HTTP
