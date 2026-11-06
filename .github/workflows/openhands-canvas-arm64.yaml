@@ -1,0 +1,46 @@
+name: OpenHands Canvas ARM64 Alpha
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'openhands_canvas/**'
+      - '.github/workflows/openhands-canvas-arm64.yaml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  packages: write
+concurrency:
+  group: openhands-canvas-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Authenticate to GHCR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_USER: ${{ github.actor }}
+        run: |
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$GH_USER" --password-stdin
+      - name: Refuse to overwrite a published Alpha tag
+        env:
+          IMG: ghcr.io/deluka-be/ha-openhands-canvas-aarch64:0.1.0-alpha.1
+        run: |
+          if docker manifest inspect "$IMG" > /tmp/openhands-manifest 2>&1; then
+            echo "Alpha image already exists; refusing to overwrite $IMG" >&2
+            exit 1
+          fi
+          if ! grep -Eiq 'manifest unknown|not found|no such manifest' /tmp/openhands-manifest; then
+            cat /tmp/openhands-manifest >&2
+            echo "Registry response ambiguous; not publishing" >&2
+            exit 1
+          fi
+      - name: Build and push pinned ARM64 Alpha
+        run: >-
+          docker buildx build --platform linux/arm64
+          --tag ghcr.io/deluka-be/ha-openhands-canvas-aarch64:0.1.0-alpha.1
+          --push
+          openhands_canvas

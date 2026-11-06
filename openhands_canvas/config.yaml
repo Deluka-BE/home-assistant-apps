@@ -1,0 +1,30 @@
+name: OpenHands Canvas
+slug: openhands_canvas
+description: Native Canvas Ingress integration - experimental Alpha
+version: "0.1.0-alpha.1"
+stage: experimental
+arch:
+  - aarch64
+startup: application
+boot: manual
+init: false
+timeout: 30
+backup: cold
+ingress: true
+ingress_port: 8099
+ingress_stream: true
+panel_admin: true
+homeassistant_api: true
+hassio_api: true
+hassio_role: default
+# Supervisor admin-only ingress; no published host ports.
+ports: {}
+ports_description: {}
+options:
+  log_level: INFO
+  timezone: Europe/Brussels
+schema:
+  log_level: list(DEBUG|INFO|WARNING|ERROR)
+  timezone: str
+url: https://github.com/Deluka-BE/home-assistant-apps/tree/main/openhands_canvas
+image: ghcr.io/deluka-be/ha-openhands-canvas-{arch}
