@@ -315,7 +315,7 @@ class CanvasFiles:
             raw = raw.replace(b'`/canvas`', ('`' + prefix + '/canvas`').encode())
         if kind == 'text/html':
             # Constant, non-secret deployment path, before all module evaluation.
-            boot = ('<script>window.__HA_CANVAS_PREFIX__=' + json.dumps(prefix) + ';</script>').encode()
+            boot = ('<script>window.__AGENT_CANVAS_DO_NOT_TRACK__=true;window.__HA_CANVAS_PREFIX__=' + json.dumps(prefix) + ';</script>').encode()
             raw = raw.replace(b'<head>', b'<head>' + boot, 1)
         return web.Response(body=raw, content_type=kind, headers=SAFE_HEADERS)
 

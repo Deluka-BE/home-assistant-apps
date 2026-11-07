@@ -1,6 +1,6 @@
 # OpenHands Canvas v0.1 Alpha
 
-Version: **0.1.0-alpha.3**. Experimental, aarch64 only.
+Version: **0.1.0-alpha.4**. Experimental, aarch64 only.
 
 Supervisor packaging for the existing pinned OpenHands Canvas runtime in
 [Deluka-BE/home-assistant-apps](https://github.com/Deluka-BE/home-assistant-apps).
@@ -68,36 +68,23 @@ provide TLS. All Supervisor peer, identity, ingress path and write/WS Origin che
 remain required. The historical `https_origin_missing` code is retained when no
 trusted origin is available. Diagnostic logs retain fixed, secret-free codes.
 
+## Alpha.4: frontend telemetry opt-out
+The native Ingress HTML injects `window.__AGENT_CANVAS_DO_NOT_TRACK__=true`
+before the first JavaScript module. This matches the upstream runtime flag used
+to disable **frontend product telemetry**. This setting does not guarantee zero
+third-party network requests, remove previously stored browser data, or remove
+the authenticated Home Assistant Ingress prefix from necessary browser requests.
+The backend URL in the Canvas store still uses this prefix; do not share URLs
+from the Canvas settings view or browser devtools.
+
+Iris independently reviewed and approved the narrow opt-out code change.
+The focused synthetic HTML test passed. Actual bundled frontend behavior and
+prior localStorage entries remain to be checked in a fresh Brave profile.
+No Ingress auth, origin, peer, user identity, or API/WS/SSE routing rules change.
+
 ## Build and release handoff
-
-The dedicated `OpenHands Canvas ARM64 Alpha` workflow follows the repository's
-native `ubuntu-24.04-arm` / Docker Buildx convention. GitHub Actions builds and
-pushes the aarch64 image on pushes to `main` affecting this add-on or its workflow.
-Pull requests and manual runs build only. Publication uses the temporary GitHub
-Actions token, with no additional configured secret. Before building for release,
-an authenticated registry preflight rejects existing tags and fails closed on
-ambiguous registry or authentication errors. Workflow runs are serialized per ref.
-Its Docker build includes the existing image/runtime checks; it does not start
-Canvas. The build context allowlist excludes evidence, tests, caches and local
-files. No credentials belong in the image or repository.
-
-The manifest expects
-`ghcr.io/deluka-be/ha-openhands-canvas-aarch64:0.1.0-alpha.3`.
-This preparation job does **not** trigger that workflow or publish an image.
-Installation requires that exact tag to be published with public pull access
-after independent review. Do not overwrite released version tags.
-No `build.yaml` is needed: the Dockerfile pins its upstream rootfs by digest and
-does not use Home Assistant base-image build arguments.
-
-No image build was attempted for this patch. Focused local-origin, startup,
-ingress and diagnostic tests passed (one installed-frontend check skipped).
-Alpha.3 has **not been validated on Pi or HAOS**. The broader suite still includes
-historical tests expecting the obsolete blocked runtime and pre-ingress manifest;
-those checks fail and were left unchanged.
-After independent review, a separate authorized Pi/HAOS validation must verify
-installation, valid startup and fail-closed rejection paths. Actual Supervisor
-authentication, admin-only access and HTTP/WS/SSE behavior remain unverified.
-
-See [DOCS.md](DOCS.md) and [FEASIBILITY.md](FEASIBILITY.md) for retained findings;
-The obsolete TLS relay remains disabled; native startup no longer calls its
-unconditional block. Historical evidence describes earlier implementation stages.
+The dedicated `OpenHands Canvas ARM64 Alpha` workflow on GitHub Actions builds
+and pushes a pinned ARM64 image on `main` using an immutable version tag.
+This version is `0.1.0-alpha.4`. Installing it requires a successful public
+GHCR release. Existing Alpha.3 remains available. The upstream Canvas image
+digest is unchanged.

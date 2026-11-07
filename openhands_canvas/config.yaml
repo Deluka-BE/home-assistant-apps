@@ -1,7 +1,7 @@
 name: OpenHands Canvas
 slug: openhands_canvas
 description: Native Canvas Ingress integration - experimental Alpha
-version: "0.1.0-alpha.3"
+version: "0.1.0-alpha.4"
 stage: experimental
 arch:
   - aarch64
