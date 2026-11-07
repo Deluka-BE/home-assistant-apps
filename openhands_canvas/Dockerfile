@@ -15,7 +15,7 @@ ENV PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
     AGENT_CANVAS_BUILD_GIT_REF=refs/tags/v1.35.0
 LABEL io.hass.name="OpenHands Canvas" \
       io.hass.description="Security-blocked OpenHands Canvas Alpha Supervisor wrapper" \
-      io.hass.type="app" io.hass.arch="aarch64" io.hass.version="0.1.0-alpha.1" \
+      io.hass.type="app" io.hass.arch="aarch64" io.hass.version="0.1.0-alpha.2" \
       org.opencontainers.image.title="OpenHands Canvas Supervisor wrapper" \
       org.opencontainers.image.source="https://github.com/Deluka-BE/home-assistant-apps"
 COPY startup.py tls_proxy.py logging_utils.py upstream_logs.py /opt/ha-canvas/

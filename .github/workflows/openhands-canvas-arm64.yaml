@@ -2,45 +2,48 @@ name: OpenHands Canvas ARM64 Alpha
 on:
   push:
     branches: [main]
-    paths:
-      - 'openhands_canvas/**'
-      - '.github/workflows/openhands-canvas-arm64.yaml'
+    paths: ['openhands_canvas/**', '.github/workflows/openhands-canvas-arm64.yaml']
+  pull_request:
+    paths: ['openhands_canvas/**', '.github/workflows/openhands-canvas-arm64.yaml']
   workflow_dispatch:
 permissions:
   contents: read
-  packages: write
 concurrency:
   group: openhands-canvas-${{ github.ref }}
   cancel-in-progress: false
 jobs:
-  build-and-publish:
+  build:
     runs-on: ubuntu-24.04-arm
-    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
-      - name: Authenticate to GHCR
+      - name: Registry login
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
           GH_USER: ${{ github.actor }}
+        run: printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$GH_USER" --password-stdin
+      - name: Preflight immutable release tag
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
-          printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$GH_USER" --password-stdin
-      - name: Refuse to overwrite a published Alpha tag
-        env:
-          IMG: ghcr.io/deluka-be/ha-openhands-canvas-aarch64:0.1.0-alpha.1
-        run: |
-          if docker manifest inspect "$IMG" > /tmp/openhands-manifest 2>&1; then
-            echo "Alpha image already exists; refusing to overwrite $IMG" >&2
+          image=ghcr.io/deluka-be/ha-openhands-canvas-aarch64:0.1.0-alpha.2
+          if docker manifest inspect "$image" > /tmp/openhands-canvas-manifest 2>&1; then
+            echo 'Refusing to overwrite existing release tag' >&2
             exit 1
           fi
-          if ! grep -Eiq 'manifest unknown|not found|no such manifest' /tmp/openhands-manifest; then
-            cat /tmp/openhands-manifest >&2
-            echo "Registry response ambiguous; not publishing" >&2
+          if ! grep -q 'manifest unknown' /tmp/openhands-canvas-manifest; then
+            echo 'Cannot establish that release tag is absent; publication stopped' >&2
             exit 1
           fi
-      - name: Build and push pinned ARM64 Alpha
+      - name: Build native ARM64 image
         run: >-
-          docker buildx build --platform linux/arm64
-          --tag ghcr.io/deluka-be/ha-openhands-canvas-aarch64:0.1.0-alpha.1
-          --push
+          docker build --platform linux/arm64
+          --tag ghcr.io/deluka-be/ha-openhands-canvas-aarch64:0.1.0-alpha.2
           openhands_canvas
+      - name: Push immutable release image
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: docker push ghcr.io/deluka-be/ha-openhands-canvas-aarch64:0.1.0-alpha.2

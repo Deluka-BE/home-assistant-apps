@@ -18,7 +18,7 @@ class CertificatePathError(ValueError):
 def options(path='/data/options.json', ssl_root='/ssl'):
     with open(path, encoding='utf-8') as stream:
         value = json.load(stream)
-    if not isinstance(value, dict) or set(value) not in ({'log_level', 'timezone'}, {'log_level', 'timezone', 'certfile', 'keyfile'}):
+    if not isinstance(value, dict) or (set(value) - {'ingress_origin'}) not in ({'log_level', 'timezone'}, {'log_level', 'timezone', 'certfile', 'keyfile'}):
         raise ValueError('invalid options')
     if value['log_level'] not in LOG_LEVELS:
         raise ValueError('invalid level')
@@ -146,7 +146,7 @@ def main():
         if not token.strip():
             stage = 'supervisor_token_required'
             raise ValueError('supervisor_token_required')
-        discovery = asyncio.run(SupervisorIngress.discover(token))
+        discovery = asyncio.run(SupervisorIngress.discover(token, cfg.get('ingress_origin')))
         del token
         os.umask(0o077)
         stage = 'state_ownership_path'
@@ -169,7 +169,15 @@ def main():
     except Exception as exc:
         if isinstance(exc, CertificatePathError):
             stage = 'certificate_path'
-        log.failure(stage, exc)
+        if stage == 'supervisor_discovery':
+            from native_ingress import DiscoveryError, DISCOVERY_REASONS
+            if isinstance(exc, DiscoveryError) and exc.reason in DISCOVERY_REASONS:
+                # Fixed codes only: never render remote payloads or exception text.
+                log.error(f'startup_failed stage={stage} exception_type=ValueError reason={exc.reason}')
+            else:
+                log.failure(stage, exc)
+        else:
+            log.failure(stage, exc)
         return 1
 
 

@@ -7,6 +7,7 @@ The upstream key never participates in the downstream HTTP or WS handshake.
 import asyncio
 from dataclasses import dataclass
 import hashlib
+import ipaddress
 import json
 import mimetypes
 from pathlib import Path
@@ -28,6 +29,22 @@ SAFE_HEADERS = {'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer',
                 'X-Content-Type-Options': 'nosniff'}
 
 
+DISCOVERY_REASONS = frozenset({
+    'supervisor_addon_info_http', 'supervisor_core_config_http',
+    'supervisor_ingress_missing', 'https_origin_missing', 'ingress_origin_invalid',
+    'ingress_prefix_invalid', 'malformed_supervisor_response', 'transport_error',
+})
+
+
+class DiscoveryError(ValueError):
+    """Carry only a fixed classification, never a remote value or exception text."""
+    def __init__(self, reason):
+        if reason not in DISCOVERY_REASONS:
+            raise ValueError('invalid_discovery_reason')
+        self.reason = reason
+        super().__init__(reason)
+
+
 async def bounded(content, maximum):
     result = bytearray()
     async for chunk in content.iter_chunked(16384):
@@ -38,11 +55,33 @@ async def bounded(content, maximum):
 
 
 def origin(value):
-    u = urlsplit(value)
-    if (u.scheme != 'https' or not u.hostname or u.username or u.password
-            or u.query or u.fragment or u.path not in ('', '/')):
-        raise ValueError('invalid_ingress_origin')
-    return f'https://{u.netloc}'
+    # Reject parser normalization (whitespace/control characters), userinfo and
+    # browser-ambiguous authorities before trusting this as an exact origin.
+    try:
+        if not isinstance(value, str) or not value.isascii() or any(
+                c.isspace() or ord(c) < 33 or ord(c) == 127 for c in value):
+            raise ValueError()
+        u = urlsplit(value)
+        if (u.scheme != 'https' or not u.hostname or '@' in u.netloc
+                or '?' in value or '#' in value or u.path not in ('', '/')
+                or '\\' in value or '%' in u.netloc or u.netloc.endswith(':')):
+            raise ValueError()
+        host = u.hostname.lower()
+        if ':' in host:
+            ipaddress.IPv6Address(host)
+            host = '[' + host + ']'
+        elif len(host) > 253 or not all(re.fullmatch(
+                r'[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?', label)
+                for label in host.split('.')):
+            raise ValueError()
+        if not re.fullmatch(r'(?:\[[0-9a-fA-F:]+\]|[A-Za-z0-9.-]+)(?::[0-9]+)?', u.netloc):
+            raise ValueError()
+        port = u.port
+        if port is not None and not 1 <= port <= 65535:
+            raise ValueError()
+        return 'https://' + host + (f':{port}' if port not in (None, 443) else '')
+    except ValueError:
+        raise ValueError('invalid_ingress_origin') from None
 
 
 @dataclass(frozen=True)
@@ -57,30 +96,64 @@ class SupervisorIngress:
             origin(value)
 
     @classmethod
-    async def discover(cls, token):
+    async def discover(cls, token, ingress_origin=None):
+        configured = None
+        if ingress_origin is not None:
+            try:
+                configured = origin(ingress_origin)
+            except ValueError:
+                raise DiscoveryError('ingress_origin_invalid') from None
         # No environment proxies, redirects, cookies or browser-controlled URLs.
-        async with aiohttp.ClientSession(trust_env=False,
-                cookie_jar=aiohttp.DummyCookieJar(),
-                timeout=aiohttp.ClientTimeout(total=15)) as session:
-            async def get(path):
-                async with session.get(SUPERVISOR + path,
-                        headers={'Authorization': 'Bearer ' + token},
-                        allow_redirects=False) as response:
-                    if response.status != 200:
-                        raise ValueError('supervisor_discovery_failed')
-                    raw = await bounded(response.content, 1024 * 1024)
-                    if len(raw) > 1024 * 1024:
-                        raise ValueError('supervisor_discovery_failed')
-                    return json.loads(raw)
-            info = await get('/addons/self/info')
-            config = await get('/core/api/config')
-        data = info['data']
-        if info.get('result') != 'ok' or data.get('ingress') is not True:
-            raise ValueError('supervisor_ingress_unavailable')
+        try:
+            async with aiohttp.ClientSession(trust_env=False,
+                    cookie_jar=aiohttp.DummyCookieJar(),
+                    timeout=aiohttp.ClientTimeout(total=15)) as session:
+                async def get(path, http_reason):
+                    async with session.get(SUPERVISOR + path,
+                            headers={'Authorization': 'Bearer ' + token},
+                            allow_redirects=False) as response:
+                        if response.status != 200:
+                            raise DiscoveryError(http_reason)
+                        try:
+                            raw = await bounded(response.content, 1024 * 1024)
+                            value = json.loads(raw)
+                        except (ValueError, UnicodeError):
+                            raise DiscoveryError('malformed_supervisor_response') from None
+                        if not isinstance(value, dict):
+                            raise DiscoveryError('malformed_supervisor_response')
+                        return value
+                info = await get('/addons/self/info', 'supervisor_addon_info_http')
+                config = await get('/core/api/config', 'supervisor_core_config_http')
+        except (aiohttp.ClientError, TimeoutError, OSError):
+            raise DiscoveryError('transport_error') from None
+        data = info.get('data')
+        if info.get('result') != 'ok' or not isinstance(data, dict):
+            raise DiscoveryError('malformed_supervisor_response')
+        if data.get('ingress') is not True or not data.get('ingress_url'):
+            raise DiscoveryError('supervisor_ingress_missing')
+        prefix = data['ingress_url']
+        if not isinstance(prefix, str) or not PREFIX.fullmatch(prefix.rstrip('/')):
+            raise DiscoveryError('ingress_prefix_invalid')
         # HA config is the authenticated Core response, not forwarded Host/Origin.
-        origins = frozenset(origin(config[k]) for k in ('internal_url', 'external_url')
-                            if config.get(k) and urlsplit(config[k]).scheme == 'https')
-        return cls(data['ingress_url'].rstrip('/'), origins)
+        # Require the expected Core fields so a wrapper is not mistaken for an
+        # otherwise valid configuration with no HTTPS URL configured.
+        if not {'internal_url', 'external_url'} <= config.keys():
+            raise DiscoveryError('malformed_supervisor_response')
+        origins = {configured} if configured else set()
+        for key in ('internal_url', 'external_url'):
+            value = config[key]
+            if value is None or value == '':
+                continue
+            if not isinstance(value, str):
+                raise DiscoveryError('malformed_supervisor_response')
+            try:
+                if urlsplit(value).scheme == 'https':
+                    origins.add(origin(value))
+            except ValueError:
+                raise DiscoveryError('https_origin_missing') from None
+        if not origins:
+            raise DiscoveryError('https_origin_missing')
+        return cls(prefix.rstrip('/'), frozenset(origins))
 
     def admit(self, request):
         peer = request.transport.get_extra_info('peername') if request.transport else None
