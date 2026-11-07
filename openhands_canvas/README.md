@@ -1,6 +1,6 @@
 # OpenHands Canvas v0.1 Alpha
 
-Version: **0.1.0-alpha.4**. Experimental, aarch64 only.
+Version: **0.1.0-alpha.5**. Experimental, aarch64 only.
 
 Supervisor packaging for the existing pinned OpenHands Canvas runtime in
 [Deluka-BE/home-assistant-apps](https://github.com/Deluka-BE/home-assistant-apps).
@@ -82,9 +82,27 @@ The focused synthetic HTML test passed. Actual bundled frontend behavior and
 prior localStorage entries remain to be checked in a fresh Brave profile.
 No Ingress auth, origin, peer, user identity, or API/WS/SSE routing rules change.
 
+## Alpha.5: bounded Python stall diagnostics
+
+The **diagnostic** Alpha.5 image adds one imported background observer
+(`ha_canvas_diagnostic`) exclusively to the upstream agent-server process.
+It samples only the Python main-thread code object's module, function, and
+line number, then emits a bounded fixed-schema warning after twelve samples in a bounded rolling window at the same function. Normal idle asyncio/uvicorn polling is ignored.
+No locals, arguments, secrets, stack traces, exception messages, file paths,
+credentials or environment values are inspected or logged. No runtime socket
+binding, remote debug interface, debugger or ptrace privilege is enabled.
+The existing Supervisor privacy and ingress boundaries are unchanged.
+
+This is **not** a repair for the still-unidentified startup stall. Review the
+sanitized `agent_main_thread_stalled` log event to identify the blocked call
+site. The add-on remains fail-closed when its API readiness check times out.
+Installing a new version on HAOS requires independent code review and a
+verified new immutable container release. No user profile store is modified
+by this diagnostic.
+
 ## Build and release handoff
 The dedicated `OpenHands Canvas ARM64 Alpha` workflow on GitHub Actions builds
 and pushes a pinned ARM64 image on `main` using an immutable version tag.
-This version is `0.1.0-alpha.4`. Installing it requires a successful public
-GHCR release. Existing Alpha.3 remains available. The upstream Canvas image
+This version is `0.1.0-alpha.5`. Installing it requires a successful public
+GHCR release. Existing Alpha.4 remains available. The upstream Canvas image
 digest is unchanged.

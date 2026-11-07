@@ -15,15 +15,17 @@ ENV PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
     AGENT_CANVAS_BUILD_GIT_REF=refs/tags/v1.35.0
 LABEL io.hass.name="OpenHands Canvas" \
       io.hass.description="Security-blocked OpenHands Canvas Alpha Supervisor wrapper" \
-      io.hass.type="app" io.hass.arch="aarch64" io.hass.version="0.1.0-alpha.4" \
+      io.hass.type="app" io.hass.arch="aarch64" io.hass.version="0.1.0-alpha.5" \
       org.opencontainers.image.title="OpenHands Canvas Supervisor wrapper" \
       org.opencontainers.image.source="https://github.com/Deluka-BE/home-assistant-apps"
 COPY startup.py tls_proxy.py logging_utils.py upstream_logs.py /opt/ha-canvas/
 COPY check_runtime.py /opt/ha-canvas/
 COPY prepare_runtime.py frontend_runtime.py ingress_policy.py /opt/ha-canvas/
 COPY native_ingress.py native_runtime.py /opt/ha-canvas/
+COPY ha_canvas_diagnostic.py /opt/ha-canvas-diag/
 USER root
 RUN ["/usr/local/bin/python3", "-c", "import sys; from pathlib import Path; sys.path.insert(0, '/opt/ha-canvas'); from prepare_runtime import sanitize_static_server; p = Path('/opt/agent-canvas/static-server.mjs'); p.write_bytes(sanitize_static_server(p.read_bytes()))"]
+RUN ["/usr/local/bin/python3", "-m", "py_compile", "/opt/ha-canvas-diag/ha_canvas_diagnostic.py"]
 RUN ["/usr/local/bin/python3", "/opt/ha-canvas/check_runtime.py"]
 RUN ["/usr/local/bin/python3", "-c", "import sys; sys.path[:0] = ['/opt/ha-canvas', '/opt/agent-canvas/tools']; import native_runtime; from native_ingress import CanvasFiles; CanvasFiles('/opt/agent-canvas/frontend'); import openhands.agent_server, openhands.automation.app, canvas_ui_tool"]
 WORKDIR /

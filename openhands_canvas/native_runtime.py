@@ -45,7 +45,7 @@ async def serve(discovery, log, env):
         OH_PERSISTENCE_DIR=str(state),
         OH_CONVERSATIONS_PATH=str(state / 'agent-canvas/conversations'),
         OH_BASH_EVENTS_DIR=str(state / 'agent-canvas/bash_events'),
-        OH_EXTRA_PYTHON_PATH='/opt/agent-canvas/tools',
+        OH_EXTRA_PYTHON_PATH='/opt/ha-canvas-diag:/opt/agent-canvas/tools',
         EXTENSIONS_PATH='/opt/agent-canvas/node_modules/@openhands/extensions',
         OPENHANDS_SUPPRESS_BANNER='1', LOG_LEVEL='WARNING',
         OPENHANDS_AUTOMATION_API_KEY=key, AUTOMATION_LOCAL_API_KEY=key,
@@ -57,10 +57,10 @@ async def serve(discovery, log, env):
         AUTOMATION_DB_URL='sqlite+aiosqlite:///' + str(state / 'automation.db'),
         AUTOMATION_BASE_URL='http://127.0.0.1:18001')
     files = CanvasFiles('/opt/agent-canvas/frontend')
-    proxy = NativeCanvas(discovery, files, key)
+    proxy = NativeCanvas(discovery, files, key, log=log)
     commands = [
         [sys.executable, '-m', 'openhands.agent_server', '--host', '127.0.0.1',
-         '--port', '18000', '--import-modules', 'canvas_ui_tool'],
+         '--port', '18000', '--import-modules', 'canvas_ui_tool,ha_canvas_diagnostic'],
         [sys.executable, '-m', 'uvicorn', 'openhands.automation.app:app',
          '--host', '127.0.0.1', '--port', '18001', '--no-access-log',
          '--no-proxy-headers', '--log-level', 'warning'],

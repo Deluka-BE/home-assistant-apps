@@ -1,6 +1,7 @@
 """Body-blind upstream output adapter. Memory bounded independently of line length."""
 import asyncio
 import json
+import re
 
 MAX_LINE = 8192
 CHUNK = 4096
@@ -38,6 +39,27 @@ def normalize(line, log, channel):
         status = record.get('status_code')
         if type(status) is int and 100 <= status <= 599:
             fields.append(f'http_status={status}')
+        if record.get('diagnostic_event') in ('sampler_started', 'sampler_unavailable'):
+            event = 'agent_' + record['diagnostic_event']
+        if record.get('diagnostic_event') == 'main_thread_stalled':
+            mod = record.get('diagnostic_module')
+            func = record.get('diagnostic_function')
+            lineno = record.get('diagnostic_lineno')
+            samples = record.get('diagnostic_samples')
+            allowed = ('openhands.', 'filelock.', 'tenacity.',
+                       'libtmux.', 'anyio.')
+            valid_mod = (isinstance(mod, str) and len(mod) <= 120
+                         and re.fullmatch(r'[A-Za-z_][A-Za-z0-9_.]*', mod)
+                         and (mod.startswith(allowed)
+                              or mod in ('filelock', 'tenacity', 'libtmux', 'anyio', '__main__')))
+            valid_func = (isinstance(func, str) and len(func) <= 120
+                          and re.fullmatch(r'[A-Za-z_][A-Za-z0-9_.<>]*', func))
+            if (valid_mod and valid_func and type(lineno) is int
+                    and 1 <= lineno <= 1000000 and type(samples) is int
+                    and 12 <= samples <= 600):
+                event = 'agent_main_thread_stalled'
+                fields.extend((f'module={mod}', f'function={func}',
+                               f'line={lineno}', f'samples={samples}'))
     else:
         text = line.decode('utf-8', errors='replace').strip()
         if text.startswith('[agent-canvas] '):
