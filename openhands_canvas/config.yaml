@@ -1,7 +1,7 @@
 name: OpenHands Canvas
 slug: openhands_canvas
 description: Native Canvas Ingress integration - experimental Alpha
-version: "0.1.0-alpha.2"
+version: "0.1.0-alpha.3"
 stage: experimental
 arch:
   - aarch64
@@ -27,5 +27,6 @@ schema:
   log_level: list(DEBUG|INFO|WARNING|ERROR)
   timezone: str
   ingress_origin: str?
+  ingress_local_origin: str?
 url: https://github.com/Deluka-BE/home-assistant-apps/tree/main/openhands_canvas
 image: ghcr.io/deluka-be/ha-openhands-canvas-{arch}

@@ -18,7 +18,7 @@ class CertificatePathError(ValueError):
 def options(path='/data/options.json', ssl_root='/ssl'):
     with open(path, encoding='utf-8') as stream:
         value = json.load(stream)
-    if not isinstance(value, dict) or (set(value) - {'ingress_origin'}) not in ({'log_level', 'timezone'}, {'log_level', 'timezone', 'certfile', 'keyfile'}):
+    if not isinstance(value, dict) or (set(value) - {'ingress_origin', 'ingress_local_origin'}) not in ({'log_level', 'timezone'}, {'log_level', 'timezone', 'certfile', 'keyfile'}):
         raise ValueError('invalid options')
     if value['log_level'] not in LOG_LEVELS:
         raise ValueError('invalid level')
@@ -146,7 +146,8 @@ def main():
         if not token.strip():
             stage = 'supervisor_token_required'
             raise ValueError('supervisor_token_required')
-        discovery = asyncio.run(SupervisorIngress.discover(token, cfg.get('ingress_origin')))
+        discovery = asyncio.run(SupervisorIngress.discover(
+            token, cfg.get('ingress_origin'), cfg.get('ingress_local_origin')))
         del token
         os.umask(0o077)
         stage = 'state_ownership_path'

@@ -25,6 +25,7 @@ TOKEN_NAME = re.compile(r'key|token|auth|secret|password|credential|^tkn$', re.I
 INDEX_SHA = '1729b7f1f5dbe29999c257056743b3e2df5e8638a108b160b6c5a0872a4619f7'
 ENTRY_SHA = '3aafb27134f0041c64d8395b332a41ca88f0f15316884e9bd03df23bad4fa2e7'
 ACTIVE_SHA = '5e0b93d4e9bfb9fa56e51a33b1b1122f60caffc86e59a03927b29962089125cc'
+ADMISSION_REASON = getattr(web, 'RequestKey', web.AppKey)('native_ingress_reason', str)
 SAFE_HEADERS = {'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer',
                 'X-Content-Type-Options': 'nosniff'}
 
@@ -33,6 +34,7 @@ DISCOVERY_REASONS = frozenset({
     'supervisor_addon_info_http', 'supervisor_core_config_http',
     'supervisor_ingress_missing', 'https_origin_missing', 'ingress_origin_invalid',
     'ingress_prefix_invalid', 'malformed_supervisor_response', 'transport_error',
+    'ingress_local_origin_invalid',
 })
 
 
@@ -43,6 +45,13 @@ class DiscoveryError(ValueError):
             raise ValueError('invalid_discovery_reason')
         self.reason = reason
         super().__init__(reason)
+
+
+class AdmissionDenied(web.HTTPForbidden):
+    """Fixed internal reason; the HTTP response remains the generic 403."""
+    def __init__(self, reason):
+        super().__init__()
+        self.admission_reason = reason
 
 
 async def bounded(content, maximum):
@@ -84,6 +93,34 @@ def origin(value):
         raise ValueError('invalid_ingress_origin') from None
 
 
+LOCAL_NETWORKS = tuple(ipaddress.ip_network(value) for value in (
+    '10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', '127.0.0.0/8',
+    '169.254.0.0/16', '::1/128', 'fc00::/7', 'fe80::/10'))
+
+
+def local_origin(value):
+    """Only literal LAN/loopback IP origins; no DNS or browser-derived trust."""
+    try:
+        if not isinstance(value, str) or not value.isascii() or any(
+                c.isspace() or ord(c) < 33 or ord(c) == 127 for c in value):
+            raise ValueError()
+        u = urlsplit(value)
+        if (u.scheme != 'http' or u.path or '?' in value or '#' in value
+                or '@' in u.netloc or '%' in value or '\\' in value
+                or not re.fullmatch(r'(?:\[[0-9a-fA-F:]+\]|[0-9.]+)(?::[0-9]+)?', u.netloc)):
+            raise ValueError()
+        address = ipaddress.ip_address(u.hostname)
+        if not any(address in network for network in LOCAL_NETWORKS):
+            raise ValueError()
+        port = u.port
+        if port is not None and not 1 <= port <= 65535:
+            raise ValueError()
+        host = f'[{address}]' if address.version == 6 else str(address)
+        return 'http://' + host + (f':{port}' if port not in (None, 80) else '')
+    except ValueError:
+        raise ValueError('invalid_ingress_local_origin') from None
+
+
 @dataclass(frozen=True)
 class SupervisorIngress:
     prefix: str
@@ -93,16 +130,25 @@ class SupervisorIngress:
         if not PREFIX.fullmatch(self.prefix) or not self.origins:
             raise ValueError('invalid_supervisor_discovery')
         for value in self.origins:
-            origin(value)
+            if isinstance(value, str) and value.startswith('http://'):
+                local_origin(value)
+            else:
+                origin(value)
 
     @classmethod
-    async def discover(cls, token, ingress_origin=None):
+    async def discover(cls, token, ingress_origin=None, ingress_local_origin=None):
         configured = None
         if ingress_origin is not None:
             try:
                 configured = origin(ingress_origin)
             except ValueError:
                 raise DiscoveryError('ingress_origin_invalid') from None
+        configured_local = None
+        if ingress_local_origin is not None:
+            try:
+                configured_local = local_origin(ingress_local_origin)
+            except ValueError:
+                raise DiscoveryError('ingress_local_origin_invalid') from None
         # No environment proxies, redirects, cookies or browser-controlled URLs.
         try:
             async with aiohttp.ClientSession(trust_env=False,
@@ -151,6 +197,17 @@ class SupervisorIngress:
                     origins.add(origin(value))
             except ValueError:
                 raise DiscoveryError('https_origin_missing') from None
+        internal = config['internal_url']
+        if internal in (None, ''):
+            if configured_local:
+                origins.add(configured_local)
+        elif isinstance(internal, str):
+            # Non-IP/public HTTP config never establishes local trust. HTTPS
+            # config and hostname-based installations retain their old behavior.
+            try:
+                origins.add(local_origin(internal))
+            except ValueError:
+                pass
         if not origins:
             raise DiscoveryError('https_origin_missing')
         return cls(prefix.rstrip('/'), frozenset(origins))
@@ -158,33 +215,33 @@ class SupervisorIngress:
     def admit(self, request):
         peer = request.transport.get_extra_info('peername') if request.transport else None
         if not peer or peer[0] != PEER:
-            raise web.HTTPForbidden()
+            raise AdmissionDenied('peer')
         # Supervisor strips and replaces user headers after session validation.
         # Fail closed on older Supervisors that do not establish a user identity.
         uid = request.headers.get('X-Remote-User-Id', '')
         if not re.fullmatch(r'[a-f0-9]{32}', uid):
-            raise web.HTTPForbidden()
+            raise AdmissionDenied('user')
         if request.headers.get('X-Ingress-Path') != self.prefix:
-            raise web.HTTPForbidden()
+            raise AdmissionDenied('ingress_path')
         supplied = request.headers.get('Origin')
         if supplied is not None and supplied not in self.origins:
-            raise web.HTTPForbidden()
+            raise AdmissionDenied('origin')
         if (request.method not in {'GET', 'HEAD'} or request.headers.get('Upgrade')) and supplied not in self.origins:
-            raise web.HTTPForbidden()
+            raise AdmissionDenied('origin')
         if request.headers.get('Sec-Fetch-Site') == 'cross-site':
-            raise web.HTTPForbidden()
+            raise AdmissionDenied('fetch_site')
         # Ambiguous duplicates must not select one identity or framing value.
         names = [k.lower() for k, _ in request.raw_headers]
         if len(names) != len(set(names)):
-            raise web.HTTPForbidden()
+            raise AdmissionDenied('duplicate_headers')
         if request.method not in {'GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'}:
-            raise web.HTTPForbidden()
+            raise AdmissionDenied('unsafe_method')
         path = request.rel_url.raw_path
         if ('%' in path or '\\' in path or '//' in path
                 or any(p in {'.', '..'} for p in path.split('/'))):
-            raise web.HTTPForbidden()
+            raise AdmissionDenied('unsafe_path')
         if any(TOKEN_NAME.search(k) for k in request.query):
-            raise web.HTTPForbidden()
+            raise AdmissionDenied('token_query')
         return uid
 
 
@@ -264,7 +321,7 @@ class CanvasFiles:
 
 
 class NativeCanvas:
-    def __init__(self, discovery, files, key, agent_port=18000, automation_port=18001):
+    def __init__(self, discovery, files, key, agent_port=18000, automation_port=18001, log=None):
         if not re.fullmatch(r'[a-f0-9]{64}', key):
             raise ValueError('invalid_server_owned_key')
         self.discovery, self.files, self._key = discovery, files, key
@@ -272,6 +329,8 @@ class NativeCanvas:
         self.automation = f'http://127.0.0.1:{automation_port}'
         self.session = None
         self.sockets = set()
+        self.log = log
+        self._diagnostics_seen = set()
 
     def safe(self, payload):
         # Last-resort leak tripwire, not a substitute for the independent review.
@@ -280,6 +339,23 @@ class NativeCanvas:
         if self._key.encode() in decoded:
             raise ValueError('upstream_credential_in_output')
         return payload
+
+    async def log_response(self, request, response):
+        # Fixed categories only: never log a target, header, query or identity.
+        # First observation per category/status/reason, capped for this process lifetime.
+        suffix = Path(request.path).suffix.lower()
+        category = ('js' if suffix in {'.js', '.mjs'} else
+                    'css' if suffix == '.css' else
+                    'html' if response.content_type == 'text/html' or request.path in {
+                        '/', '/canvas', '/canvas/'} else 'other')
+        status = int(response.status)
+        reason = request.get(ADMISSION_REASON, 'none')
+        event = (category, status, reason)
+        if (self.log is not None and len(self._diagnostics_seen) < 128
+                and event not in self._diagnostics_seen
+                and (category != 'other' or status in {403, 404})):
+            self._diagnostics_seen.add(event)
+            self.log.info(f'native_ingress_response category={category} status={status} reason={reason}')
 
     def app(self):
         app = web.Application(client_max_size=MAX_BODY)
@@ -297,12 +373,17 @@ class NativeCanvas:
             await asyncio.gather(*(socket.close(code=1001) for socket in tuple(self.sockets)),
                                  return_exceptions=True)
         app.on_shutdown.append(shutdown)
+        app.on_response_prepare.append(self.log_response)
         app.cleanup_ctx.append(lifecycle)
         app.router.add_route('*', '/{tail:.*}', self.handle)
         return app
 
     async def handle(self, request):
-        self.discovery.admit(request)
+        try:
+            self.discovery.admit(request)
+        except AdmissionDenied as exc:
+            request[ADMISSION_REASON] = exc.admission_reason
+            raise
         path = request.path
         if path.startswith('/sockets/'):
             return await self.websocket(request)

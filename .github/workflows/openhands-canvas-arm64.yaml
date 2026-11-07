@@ -30,7 +30,7 @@ jobs:
       - name: Preflight immutable release tag
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
-          image=ghcr.io/deluka-be/ha-openhands-canvas-aarch64:0.1.0-alpha.2
+          image=ghcr.io/deluka-be/ha-openhands-canvas-aarch64:0.1.0-alpha.3
           if docker manifest inspect "$image" > /tmp/openhands-canvas-manifest 2>&1; then
             echo 'Refusing to overwrite existing release tag' >&2
             exit 1
@@ -42,8 +42,8 @@ jobs:
       - name: Build native ARM64 image
         run: >-
           docker build --platform linux/arm64
-          --tag ghcr.io/deluka-be/ha-openhands-canvas-aarch64:0.1.0-alpha.2
+          --tag ghcr.io/deluka-be/ha-openhands-canvas-aarch64:0.1.0-alpha.3
           openhands_canvas
       - name: Push immutable release image
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: docker push ghcr.io/deluka-be/ha-openhands-canvas-aarch64:0.1.0-alpha.2
+        run: docker push ghcr.io/deluka-be/ha-openhands-canvas-aarch64:0.1.0-alpha.3
