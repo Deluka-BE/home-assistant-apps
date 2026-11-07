@@ -95,6 +95,7 @@ class Diagnostics(unittest.TestCase):
         self.assertIn("'--import-modules', 'canvas_ui_tool,ha_canvas_diagnostic'",runtime)
         self.assertIn("OH_EXTRA_PYTHON_PATH='/opt/ha-canvas-diag:/opt/agent-canvas/tools'",runtime)
         self.assertIn("COPY ha_canvas_diagnostic.py /opt/ha-canvas-diag/",docker)
+        self.assertIn("!ha_canvas_diagnostic.py", (root/".dockerignore").read_text())
         self.assertIn('"py_compile", "/opt/ha-canvas-diag/ha_canvas_diagnostic.py"',docker)
         self.assertNotIn("CAP_SYS_PTRACE",runtime+docker)
         self.assertNotIn("faulthandler",runtime+docker)

@@ -10,3 +10,4 @@
 !ingress_policy.py
 !native_ingress.py
 !native_runtime.py
+!ha_canvas_diagnostic.py
